@@ -1,0 +1,47 @@
+services:
+  cocoindex-db:
+    image: pgvector/pgvector:pg17
+    container_name: cocoindex-db
+    ports:
+      - 5432:5432
+    volumes:
+      - cocoindex-db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - 6333:6333
+      - 6334:6334
+    volumes:
+      - qdrant:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY in .env}
+
+  lcars-app:
+    build: .
+    container_name: lcars-app
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+      - ./config.yml:/app/config.yml
+      # Override baked-in patterns.yml if needed:
+      # - ./patterns.yml:/app/patterns.yml
+    env_file:
+      - .env
+    depends_on:
+      - cocoindex-db
+      - qdrant
+
+volumes:
+  qdrant:
+    external: true
+  cocoindex-db:
+    external: true

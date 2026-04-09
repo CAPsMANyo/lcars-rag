@@ -1,0 +1,8 @@
+data/
+.git/
+.github/
+__pycache__/
+*.egg-info/
+.venv/
+skipped_files.json
+.env

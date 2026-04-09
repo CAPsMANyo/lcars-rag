@@ -1,0 +1,40 @@
+[project]
+name = "lcars-rag"
+version = "0.1.0"
+description = "LCARS RAG embedding pipeline using CocoIndex"
+requires-python = ">=3.12"
+dependencies = [
+    # Core
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0.0",
+
+    # Database & Vector Storage
+    "psycopg",
+    "psycopg-binary",
+    "psycopg-pool",
+    "pgvector",
+    "qdrant-client",
+
+    # Embedding
+    "cocoindex>=0.3.28",
+
+    # Chunking
+    "omnichunk",
+
+    # Web UI
+    "flask>=3.0.0",
+
+    # MCP client (for MCP test page)
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+lcars-sync-repos = "lcars_rag.sync_repos:main"
+lcars-dashboard = "lcars_rag.dashboard:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lcars_rag"]

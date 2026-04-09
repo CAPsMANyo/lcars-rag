@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS Sync Log</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #e0e0e0; padding: 1.5rem; display: flex; flex-direction: column; height: 100vh; }
+  h1 { color: #f9a825; margin-bottom: 0.5rem; }
+  nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  nav a { text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #333; color: #888; background: #1a1a2e; }
+  nav a.active { color: #f9a825; font-weight: bold; border-color: #f9a825; background: #252540; }
+  .stats { display: flex; gap: 1.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end; }
+  .stat-card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 0.8rem 1.2rem; min-width: 140px; }
+  .stat-card .label { color: #888; font-size: 0.75rem; text-transform: uppercase; }
+  .stat-card .value { color: #f9a825; font-size: 1.1rem; font-weight: bold; margin-top: 0.2rem; }
+  .stat-card .sub { color: #666; font-size: 0.7rem; margin-top: 0.15rem; }
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.4rem; vertical-align: middle; }
+  .status-running { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+  .status-completed { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+  .status-stopped { background: #f44336; box-shadow: 0 0 6px #f44336; }
+  .status-unknown { background: #666; }
+  .interval-control { display: flex; align-items: center; gap: 0.5rem; }
+  .interval-control select { background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+  .interval-control button { background: #252540; color: #f9a825; border: 1px solid #333; padding: 0.35rem 0.7rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+  .interval-control button:hover { background: #333355; }
+  .interval-control .saved { color: #4caf50; font-size: 0.8rem; opacity: 0; transition: opacity 0.3s; }
+  .interval-control .saved.show { opacity: 1; }
+  .log-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+  .log-header h2 { color: #f9a825; font-size: 1rem; }
+  .log-actions { display: flex; gap: 0.5rem; align-items: center; }
+  .log-actions button { background: #252540; color: #f9a825; border: 1px solid #333; padding: 0.3rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+  .log-actions button:hover { background: #333355; }
+  .log-actions label { font-size: 0.8rem; color: #888; display: flex; align-items: center; gap: 0.3rem; }
+  .log-actions input[type="checkbox"] { accent-color: #f9a825; }
+  #log-viewer { flex: 1; background: #111; border: 1px solid #333; border-radius: 6px; padding: 0.8rem; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.8rem; line-height: 1.5; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #ccc; min-height: 200px; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">Status</a>
+  <a href="/index">Index Monitor</a>
+  <a href="/sync-log" class="active">Sync Log</a>
+  <a href="/skip-report">Skip Report</a>
+</nav>
+<h1>LCARS Sync Log</h1>
+
+<div class="stats">
+  <div class="stat-card">
+    <div class="label">Sync Status</div>
+    <div class="value" id="sync-status"><span class="status-dot status-unknown"></span>Loading...</div>
+    <button id="sync-now-btn" style="margin-top:0.4rem;background:#252540;color:#f9a825;border:1px solid #333;padding:0.3rem 0.8rem;border-radius:4px;cursor:pointer;font-size:0.8rem;width:100%;">Sync Now</button>
+  </div>
+  <div class="stat-card">
+    <div class="label">Last Completed</div>
+    <div class="value" id="last-completed">--</div>
+    <div class="sub" id="last-completed-ago"></div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Next Sync</div>
+    <div class="value" id="next-sync">--</div>
+    <div class="sub" id="next-sync-in"></div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Sync Interval</div>
+    <div class="interval-control">
+      <select id="interval-select">
+        <option value="300">5 min</option>
+        <option value="600">10 min</option>
+        <option value="1800">30 min</option>
+        <option value="3600">1 hour</option>
+        <option value="7200">2 hours</option>
+        <option value="14400">4 hours</option>
+        <option value="28800">8 hours</option>
+        <option value="86400">24 hours</option>
+      </select>
+      <button id="interval-save">Save</button>
+      <span class="saved" id="interval-saved">Saved!</span>
+    </div>
+  </div>
+</div>
+
+<div class="log-container">
+  <div class="log-header">
+    <h2>Sync Logs</h2>
+    <div class="log-actions">
+      <label><input type="checkbox" id="auto-scroll" checked> Auto-scroll</label>
+      <button onclick="clearLog()">Clear View</button>
+    </div>
+  </div>
+  <div id="log-viewer">Connecting...</div>
+</div>
+
+<script>
+const logViewer = document.getElementById('log-viewer');
+const autoScrollCheckbox = document.getElementById('auto-scroll');
+const intervalSelect = document.getElementById('interval-select');
+
+let logOffset = 0;
+let initialLoad = true;
+let currentInterval = null;
+let lastCompleted = null;
+
+logViewer.addEventListener('scroll', function() {
+  const atBottom = logViewer.scrollHeight - logViewer.scrollTop - logViewer.clientHeight < 30;
+  autoScrollCheckbox.checked = atBottom;
+});
+
+function scrollToBottom() {
+  if (autoScrollCheckbox.checked) logViewer.scrollTop = logViewer.scrollHeight;
+}
+
+function clearLog() { logViewer.textContent = ''; }
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatTime(dateStr) {
+  if (!dateStr) return '--';
+  return new Date(dateStr).toLocaleTimeString();
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+async function fetchSyncState() {
+  try {
+    const resp = await fetch('/api/sync/state');
+    const data = await resp.json();
+
+    const statusEl = document.getElementById('sync-status');
+    const dotClass = data.status === 'running' ? 'status-running' : data.status === 'completed' ? 'status-completed' : 'status-unknown';
+    const label = data.status === 'running' ? 'Syncing...' : data.status === 'completed' ? 'Idle' : data.status || 'Unknown';
+    statusEl.innerHTML = `<span class="status-dot ${dotClass}"></span>${label}`;
+
+    // Disable button while sync is running
+    const btn = document.getElementById('sync-now-btn');
+    if (data.status === 'running') {
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+    } else if (btn.textContent === 'Syncing...') {
+      btn.disabled = false;
+      btn.textContent = 'Sync Now';
+    }
+
+    lastCompleted = data.last_completed;
+    document.getElementById('last-completed').textContent = formatTime(data.last_completed);
+    document.getElementById('last-completed-ago').textContent = data.last_completed ? timeAgo(data.last_completed) : '';
+
+    // Next sync estimate
+    if (data.last_completed && data.sync_interval) {
+      const nextTime = new Date(new Date(data.last_completed).getTime() + data.sync_interval * 1000);
+      const remaining = Math.max(0, Math.floor((nextTime.getTime() - Date.now()) / 1000));
+      document.getElementById('next-sync').textContent = nextTime.toLocaleTimeString();
+      document.getElementById('next-sync-in').textContent = remaining > 0 ? `in ${formatDuration(remaining)}` : 'due now';
+    } else {
+      document.getElementById('next-sync').textContent = '--';
+      document.getElementById('next-sync-in').textContent = '';
+    }
+
+    // Set interval dropdown if we haven't yet or if it changed server-side
+    if (data.sync_interval && data.sync_interval !== currentInterval) {
+      currentInterval = data.sync_interval;
+      intervalSelect.value = String(data.sync_interval);
+      // If the value doesn't match a preset, add a custom option
+      if (intervalSelect.value !== String(data.sync_interval)) {
+        const opt = document.createElement('option');
+        opt.value = data.sync_interval;
+        opt.textContent = formatDuration(data.sync_interval);
+        intervalSelect.appendChild(opt);
+        intervalSelect.value = String(data.sync_interval);
+      }
+    }
+  } catch (e) {}
+}
+
+document.getElementById('interval-save').addEventListener('click', async () => {
+  const interval = parseInt(intervalSelect.value);
+  try {
+    const resp = await fetch('/api/sync/interval', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({interval}),
+    });
+    if (resp.ok) {
+      currentInterval = interval;
+      const saved = document.getElementById('interval-saved');
+      saved.classList.add('show');
+      setTimeout(() => saved.classList.remove('show'), 2000);
+      fetchSyncState();
+    }
+  } catch (e) {}
+});
+
+async function fetchLogs() {
+  try {
+    const url = initialLoad
+      ? '/api/sync/logs?lines=200'
+      : '/api/sync/logs?offset=' + logOffset;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.content) {
+      if (initialLoad) {
+        logViewer.textContent = data.content;
+        initialLoad = false;
+      } else {
+        logViewer.textContent += data.content;
+      }
+      scrollToBottom();
+    }
+    logOffset = data.offset;
+  } catch (e) {}
+}
+
+document.getElementById('sync-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('sync-now-btn');
+  btn.disabled = true;
+  btn.textContent = 'Triggering...';
+  try {
+    const resp = await fetch('/api/sync/trigger', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      btn.textContent = 'Triggered!';
+      setTimeout(() => { btn.textContent = 'Sync Now'; btn.disabled = false; }, 3000);
+    } else {
+      btn.textContent = data.error || 'Failed';
+      setTimeout(() => { btn.textContent = 'Sync Now'; btn.disabled = false; }, 3000);
+    }
+    fetchSyncState();
+  } catch (e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Sync Now'; btn.disabled = false; }, 3000);
+  }
+});
+
+fetchSyncState();
+fetchLogs();
+setInterval(fetchSyncState, 5000);
+setInterval(fetchLogs, 2000);
+</script>
+</body>
+</html>

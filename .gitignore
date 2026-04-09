@@ -1,0 +1,18 @@
+*.swp
+**egg-info**
+__pycache__/
+.venv/
+
+# Runtime data
+data/
+skipped_files.json
+
+# Secrets / credentials — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+credentials.json
+secrets/

@@ -1,0 +1,304 @@
+# LCARS RAG Configuration
+# Secrets and connection strings (DB URLs, API keys) belong in .env
+
+settings:
+  embedding_dimension: 1024
+  max_file_size: 100000
+  chunk_size: 1000
+  chunk_overlap: 200
+  refresh_interval: 30
+  sync_interval: 3600
+  use_exclude_patterns: true
+  metadata_table: source_metadata
+
+git_sources:
+  # - url: https://github.com/githubtraining/hellogitworld.git
+  #   name: hellogitworld
+  #   branch: master
+  #   tags:
+  #     - test
+  #     - docker
+
+  - url: https://github.com/PrefectHQ/fastmcp.git
+    name: fastmcp
+    branch: main
+    tags:
+      - ai
+      - mcp
+      - python
+
+  - url: https://github.com/qdrant/mcp-server-qdrant.git
+    name: qdrant_mcp
+    branch: master
+    tags:
+      - ai
+      - mcp
+      - qdrant
+      - python
+
+  - url: https://github.com/cocoindex-io/cocoindex.git
+    name: cocoindex
+    tags:
+      - ai
+      - python
+      - rust
+      - rag
+    branch: main
+
+  - url: https://github.com/open-webui/open-webui
+    name: open_webui
+    branch: main
+    tags:
+      - ai
+      - open-webui
+
+  - url: https://github.com/open-webui/pipelines.git
+    name: open_webui_pipelines
+    branch: main
+    tags:
+      - ai
+      - open-webui
+
+  - url: https://github.com/open-webui/mcpo.git
+    name: mcpo
+    branch: main
+    tags:
+      - mcp
+      - mcpo
+      - python
+      - open-webui
+  
+  
+  # - url: https://github.com/n8n-io/n8n.git
+  #   nam: n8n
+  #   branch: master
+  #   tags:
+  #     - automation
+  #     - homelab
+  #     - workflows
+
+  - url: https://github.com/blakeblackshear/frigate.git
+    name: frigate
+    branch: master
+    tags:
+      - homelab
+      - nvr
+
+  - url: https://github.com/theroyallab/tabbyAPI
+    name: tabbyapi
+    branch: main
+    tags:
+      - ai
+      - homelab
+
+  # - url: https://github.com/oobabooga/text-generation-webui
+  #   name: oobabooga_text_generation_webui
+  #   branch: main
+  #   tags:
+  #     - tgui
+  #     - text-generation-webui
+  #     - ai
+  #     - homelab
+
+  # - url: https://github.com/Atinoda/text-generation-webui-docker
+  #   name: text_generation_webui_docker
+  #   branch: master
+  #   tags:
+  #     - tgui
+  #     - docker
+  #     - text-generation-webui
+  #     - ai
+  #     - homelab
+
+  - url: https://github.com/turboderp-org/exllamav3
+    name: exllamav3
+    branch: master
+    tags:
+      - ai
+
+  - url: https://github.com/traefik/traefik
+    name: traefik
+    branch: master
+    tags:
+      - k8s
+      - homelab
+
+  - url: https://github.com/Radarr/Radarr
+    name: radarr
+    branch: master
+    tags:
+      - arr
+      - homelab
+      - media
+
+  - url: https://github.com/Sonarr/Sonarr
+    name: sonarr
+    branch: main
+    tags:
+      - arr
+      - homelab
+      - media
+
+  - url: https://github.com/Prowlarr/Prowlarr
+    name: prowlarr
+    branch: master
+    tags:
+      - arr
+      - homelab
+      - media
+
+  - url: https://github.com/morpheus65535/bazarr
+    name: bazarr
+    branch: master
+    tags:
+      - arr
+      - homelab
+      - media
+
+  - url: https://github.com/TRaSH-Guides/Guides.git
+    name: trash_guides
+    branch: master
+    tags:
+      - arr
+      - media
+      - trash-guides
+
+  - url: https://codeberg.org/forgejo/docs.git
+    name: forgejo_docs
+    branch: next
+    tags:
+      - homelab
+      - git
+      - forgejo
+
+  - url: https://code.forgejo.org/forgejo/runner.git
+    name: forgejo_runner
+    branch: main
+    tags:
+      - homelab
+      - git
+      - forgejo
+
+  # - url: https://github.com/ansible/ansible-documentation
+  #   name: ansible_documentation
+  #   branch: stable-2.16
+
+  #   tags:
+  #     - ansible
+  #     - ansible-documentation
+
+  # - url: https://github.com/ansible/ansible
+  #   name: ansible
+  #   branch: stable-2.16
+
+  #   tags:
+  #     - ansible
+  #     - ansible-core
+
+  # - url: https://github.com/hashicorp/terraform
+  #   name: terraform
+  #   branch: main
+
+  #   tags:
+  #     - hashicorp
+  #     - terraform
+
+  # - url: https://github.com/cert-manager/cert-manager
+  #   name: cert_manager
+  #   branch:  master
+
+  #   tags:
+  #     - k8s
+  #     - cert-manager
+  #     - cert-management
+    
+  # - url: https://github.com/bitnami-labs/sealed-secrets.git
+  #   name: sealed_secrets
+  #   branch:  main
+
+  #   tags:
+  #     - k8s
+  #     - sealed-secrets
+  #     - secrets-management
+
+  # - url: https://github.com/hashicorp/vault
+  #   name: vault
+  #   branch: main
+
+  #   tags:
+  #     - hashicorp
+  #     - vault
+  #     - secrets-management
+  #     - cert-management
+    
+  # - url: https://github.com/rancher/rancher
+  #   name: rancher
+  #   branch:  main
+
+  #   tags:
+  #     - k8s
+  #     - rancher
+    
+  # - url: https://github.com/argoproj/argo-cd
+  #   name: argocd
+  #   branch:  master
+
+  #   tags:
+  #     - k8s
+  #     - cd
+  #     - argocd
+    
+  # - url: https://github.com/fluxcd/flux2
+  #   name: fluxcd
+  #   branch:  main
+
+  #   tags:
+  #     - k8s
+  #     - cd
+  #     - fluxcd
+    
+  # - url: https://github.com/rancher/fleet
+  #   name: fleet
+  #   branch:  main
+
+  #   tags:
+  #     - k8s
+  #     - cd
+  #     - fleet
+  #     - rancher
+    
+  # - url: https://github.com/metallb/metallb
+  #   name: metallb
+  #   branch:  main
+
+  #   tags:
+  #     - k8s
+  #     - metallb
+
+  # - url: https://github.com/uyuni-project/uyuni-docs
+  #   name: uyuni_docs
+  #   branch: master
+
+  #   tags:
+  #     - uyuni
+  #     - lasp
+  #     - suse
+
+  # - url: https://github.com/uyuni-project/uyuni-docs-api
+  #   name: uyuni_api_docs
+  #   branch: master
+
+  #   tags:
+  #     - uyuni
+  #     - lasp
+  #     - suse
+
+  # - url: https://github.com/uyuni-project/uyuni
+  #   name: uyuni
+  #   branch: master
+
+  #   tags:
+  #     - uyuni
+  #     - lasp
+  #     - suse
+

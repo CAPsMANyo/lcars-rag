@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS Status</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #e0e0e0; padding: 1.5rem; }
+  h1 { color: #f9a825; margin-bottom: 0.5rem; }
+  nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  nav a { text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #333; color: #888; background: #1a1a2e; }
+  nav a.active { color: #f9a825; font-weight: bold; border-color: #f9a825; background: #252540; }
+  .meta { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 1rem 1.2rem; border-left: 4px solid #333; }
+  .card.ok, .card.running { border-left-color: #4caf50; }
+  .card.error, .card.stopped { border-left-color: #f44336; }
+  .card.not_started { border-left-color: #f9a825; }
+  .card.unconfigured { border-left-color: #555; }
+  .card-title { color: #f9a825; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.4rem; }
+  .card-status { font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .status-dot.ok, .status-dot.running { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+  .status-dot.error, .status-dot.stopped { background: #f44336; box-shadow: 0 0 6px #f44336; }
+  .status-dot.not_started { background: #f9a825; box-shadow: 0 0 6px #f9a825; }
+  .status-dot.unconfigured { background: #555; }
+  .detail { color: #888; font-size: 0.75rem; margin-top: 0.4rem; word-break: break-all; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="active">Status</a>
+  <a href="/index">Index Monitor</a>
+  <a href="/sync-log">Sync Log</a>
+  <a href="/skip-report">Skip Report</a>
+</nav>
+<h1>LCARS Status</h1>
+<div class="meta" id="refresh-time">Loading...</div>
+
+<div class="grid" id="status-grid"></div>
+
+<script>
+const labels = {
+  embedding: 'Embedding Model',
+  postgres: 'PostgreSQL',
+  qdrant: 'Qdrant',
+  cocoindex: 'CocoIndex Live Updater',
+  sync: 'Repo Sync',
+  sync_watcher: 'Sync Watcher',
+};
+
+function renderStatus(data) {
+  const grid = document.getElementById('status-grid');
+  grid.innerHTML = '';
+  for (const [key, val] of Object.entries(data)) {
+    const status = val.status || 'unknown';
+    const card = document.createElement('div');
+    card.className = `card ${status}`;
+    let detail = '';
+    if (val.detail && typeof val.detail === 'object') {
+      const d = val.detail;
+      if (d.model_id) detail = `Model: ${d.model_id}`;
+      else detail = JSON.stringify(d);
+    } else if (val.detail && val.detail !== 'connected' && val.detail !== 'healthy') {
+      detail = val.detail;
+    }
+    let extra = '';
+    if (detail) extra += `<div class="detail">${detail}</div>`;
+    if (val.pid) extra += `<div class="detail">PID: ${val.pid}</div>`;
+    if (val.last_completed) extra += `<div class="detail">Last sync: ${new Date(val.last_completed).toLocaleString()}</div>`;
+    if (val.sync_interval) extra += `<div class="detail">Interval: ${val.sync_interval >= 3600 ? Math.floor(val.sync_interval/3600) + 'h' : Math.floor(val.sync_interval/60) + 'm'}</div>`;
+
+    card.innerHTML = `
+      <div class="card-title">${labels[key] || key}</div>
+      <div class="card-status">
+        <span class="status-dot ${status}"></span>
+        ${status.replace('_', ' ')}
+      </div>
+      ${extra}
+    `;
+    grid.appendChild(card);
+  }
+  document.getElementById('refresh-time').textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+function fetchStatus() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(renderStatus)
+    .catch(err => {
+      document.getElementById('status-grid').innerHTML =
+        `<div class="card error"><div class="card-title">Error</div><div class="card-status">${err}</div></div>`;
+    });
+}
+
+fetchStatus();
+setInterval(fetchStatus, 10000);
+</script>
+</body>
+</html>

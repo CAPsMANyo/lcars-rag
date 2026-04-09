@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS Skip Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #e0e0e0; padding: 1.5rem; }
+  h1 { color: #f9a825; margin-bottom: 0.5rem; }
+  nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  nav a { text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #333; color: #888; background: #1a1a2e; }
+  nav a.active { color: #f9a825; font-weight: bold; border-color: #f9a825; background: #252540; }
+  .meta { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .controls label { font-size: 0.9rem; color: #aaa; }
+  select, input { background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.9rem; }
+  .stats { display: flex; gap: 2rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .stat-card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 1rem 1.5rem; min-width: 160px; }
+  .stat-card .label { color: #888; font-size: 0.8rem; text-transform: uppercase; }
+  .stat-card .value { color: #f9a825; font-size: 1.5rem; font-weight: bold; margin-top: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; background: #1a1a2e; border-radius: 6px; overflow: hidden; }
+  th { background: #252540; color: #f9a825; text-align: left; padding: 0.6rem 0.8rem; cursor: pointer; user-select: none; font-size: 0.85rem; text-transform: uppercase; white-space: nowrap; }
+  th:hover { background: #333355; }
+  th .arrow { margin-left: 0.3rem; font-size: 0.7rem; }
+  td { padding: 0.5rem 0.8rem; border-top: 1px solid #222; font-size: 0.85rem; }
+  tr:hover td { background: #222240; }
+  .source-tag { background: #333355; color: #c0c0ff; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; }
+  .reason-tag { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; font-weight: 500; }
+  .reason-excluded { background: #3d2b2b; color: #ff9999; }
+  .reason-oversized { background: #3d3520; color: #ffd666; }
+  .reason-not_included { background: #2b2b3d; color: #9999ff; }
+  .size { font-family: monospace; text-align: right; }
+  .empty { text-align: center; padding: 3rem; color: #666; }
+  td.size { text-align: right; }
+  th.size { text-align: right; }
+  .detail { color: #888; font-size: 0.8rem; }
+  .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
+  .pager button { background: #252540; color: #f9a825; border: 1px solid #333; padding: 0.3rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+  .pager button:hover { background: #333355; }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+  .pager .info { color: #888; font-size: 0.85rem; }
+  .loading { text-align: center; padding: 2rem; color: #888; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">Status</a>
+  <a href="/index">Index Monitor</a>
+  <a href="/sync-log">Sync Log</a>
+  <a href="/skip-report" class="active">Skip Report</a>
+</nav>
+<h1>LCARS Skip Report</h1>
+<div class="meta" id="meta">Loading...</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="controls">
+  <label>Source:
+    <select id="sourceFilter"><option value="">All Sources</option></select>
+  </label>
+  <label>Reason:
+    <select id="reasonFilter"><option value="">All Reasons</option></select>
+  </label>
+  <label>Search:
+    <input type="text" id="searchBox" placeholder="Filter by path...">
+  </label>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th data-sort="source">Source <span class="arrow"></span></th>
+      <th data-sort="file">File Path <span class="arrow"></span></th>
+      <th data-sort="reason">Reason <span class="arrow"></span></th>
+      <th data-sort="detail">Detail <span class="arrow"></span></th>
+      <th data-sort="size_bytes" class="size">Size <span class="arrow"></span></th>
+    </tr>
+  </thead>
+  <tbody id="tbody"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+</table>
+
+<div class="pager">
+  <button id="prev-btn" disabled>&laquo; Prev</button>
+  <span class="info" id="pager-info"></span>
+  <button id="next-btn" disabled>Next &raquo;</button>
+</div>
+
+<script>
+const PAGE_SIZE = 200;
+let sortCol = 'size_bytes';
+let sortAsc = false;
+let currentOffset = 0;
+let totalRows = 0;
+let meta = {};
+
+// Debounce helper
+let searchTimer = null;
+function debounce(fn, ms) {
+  return function(...args) {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+async function fetchMeta() {
+  try {
+    const resp = await fetch('/api/skip-report/meta');
+    meta = await resp.json();
+
+    document.getElementById('meta').textContent =
+      `Generated: ${meta.generated_at || 'N/A'} | Default max file size: ${formatBytes(meta.max_file_size_default)} | Total skipped: ${meta.total_skipped}`;
+
+    // Populate source filter
+    const sf = document.getElementById('sourceFilter');
+    for (const source of Object.keys(meta.sources || {})) {
+      const opt = document.createElement('option');
+      opt.value = source;
+      opt.textContent = source;
+      sf.appendChild(opt);
+    }
+
+    // Populate reason filter
+    const rf = document.getElementById('reasonFilter');
+    for (const reason of Object.keys(meta.counts_by_reason || {})) {
+      const opt = document.createElement('option');
+      opt.value = reason;
+      opt.textContent = `${reason} (${meta.counts_by_reason[reason]})`;
+      rf.appendChild(opt);
+    }
+
+    renderStats();
+  } catch (e) {
+    document.getElementById('meta').textContent = 'Error loading report metadata';
+  }
+}
+
+function renderStats() {
+  const statsEl = document.getElementById('stats');
+  const filterSource = document.getElementById('sourceFilter').value;
+  let counts;
+  if (filterSource && meta.sources && meta.sources[filterSource]) {
+    counts = meta.sources[filterSource].counts_by_reason || {};
+  } else {
+    counts = meta.counts_by_reason || {};
+  }
+  statsEl.innerHTML = '';
+  for (const [reason, count] of Object.entries(counts)) {
+    statsEl.innerHTML += `
+      <div class="stat-card">
+        <div class="label">${reason}</div>
+        <div class="value">${count}</div>
+      </div>`;
+  }
+}
+
+async function fetchRows() {
+  const params = new URLSearchParams();
+  const source = document.getElementById('sourceFilter').value;
+  const reason = document.getElementById('reasonFilter').value;
+  const search = document.getElementById('searchBox').value;
+
+  if (source) params.set('source', source);
+  if (reason) params.set('reason', reason);
+  if (search) params.set('search', search);
+  params.set('sort', sortCol);
+  params.set('asc', sortAsc ? '1' : '0');
+  params.set('offset', currentOffset);
+  params.set('limit', PAGE_SIZE);
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+
+  try {
+    const resp = await fetch('/api/skip-report/rows?' + params);
+    const data = await resp.json();
+    totalRows = data.total;
+
+    if (data.rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No skipped files found.</td></tr>';
+    } else {
+      tbody.innerHTML = data.rows.map(r => `
+        <tr>
+          <td><span class="source-tag">${r.source}</span></td>
+          <td>${r.file}</td>
+          <td><span class="reason-tag reason-${r.reason}">${r.reason}</span></td>
+          <td class="detail">${r.detail}</td>
+          <td class="size" title="${r.size_bytes} bytes">${r.size_human || formatBytes(r.size_bytes)}</td>
+        </tr>`).join('');
+    }
+
+    updatePager();
+    updateArrows();
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Error loading data</td></tr>';
+  }
+}
+
+function updatePager() {
+  const start = totalRows === 0 ? 0 : currentOffset + 1;
+  const end = Math.min(currentOffset + PAGE_SIZE, totalRows);
+  document.getElementById('pager-info').textContent = `${start}-${end} of ${totalRows}`;
+  document.getElementById('prev-btn').disabled = currentOffset === 0;
+  document.getElementById('next-btn').disabled = currentOffset + PAGE_SIZE >= totalRows;
+}
+
+function updateArrows() {
+  document.querySelectorAll('th .arrow').forEach(el => el.textContent = '');
+  const ah = document.querySelector(`th[data-sort="${sortCol}"] .arrow`);
+  if (ah) ah.textContent = sortAsc ? ' \u25B2' : ' \u25BC';
+}
+
+// Event listeners
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.sort;
+    if (sortCol === col) sortAsc = !sortAsc;
+    else { sortCol = col; sortAsc = true; }
+    currentOffset = 0;
+    fetchRows();
+  });
+});
+
+document.getElementById('sourceFilter').addEventListener('change', () => {
+  currentOffset = 0;
+  renderStats();
+  fetchRows();
+});
+document.getElementById('reasonFilter').addEventListener('change', () => { currentOffset = 0; fetchRows(); });
+document.getElementById('searchBox').addEventListener('input', debounce(() => { currentOffset = 0; fetchRows(); }, 300));
+
+document.getElementById('prev-btn').addEventListener('click', () => {
+  currentOffset = Math.max(0, currentOffset - PAGE_SIZE);
+  fetchRows();
+});
+document.getElementById('next-btn').addEventListener('click', () => {
+  currentOffset += PAGE_SIZE;
+  fetchRows();
+});
+
+// Initial load
+fetchMeta();
+fetchRows();
+</script>
+</body>
+</html>
