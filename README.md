@@ -10,7 +10,7 @@ I decided to build a self-hosted alternative. Sources are defined in a config fi
 
 ## What It Does
 
-Clones git repos, chunks content, and indexes it into Qdrant or PostgreSQL (pgvector). Paired with [lcars-mcp-server](https://github.com/CAPsMANyo/lcars-mcp-server), it provides semantic search over your codebase and docs from any MCP-compatible client. Includes an LCARS-themed dashboard for status, sync logs, and skip reports.
+Clones git repos, chunks content, and indexes it into Qdrant or PostgreSQL (pgvector). Paired with [lcars-mcp-server](https://github.com/CAPsMANyo/lcars-mcp-server), it provides semantic search over your codebase and docs from any MCP-compatible client. Includes a dashboard for status, sync logs, and skip reports.
 
 ## Prerequisites
 
