@@ -97,10 +97,6 @@ The `lcars-app` container runs both the dashboard and `cocoindex update -L` for 
 docker compose up -d
 ```
 
-## CI Pipeline
-
-A GitHub Actions workflow at `.github/workflows/docker-build.yml` builds and publishes the dashboard container image to GitHub Container Registry (GHCR) on every push to `main` (tagged `latest`) or `dev` (tagged `dev`). It can also be run manually from the Actions tab.
-
 ## Data Flow
 
 ```
@@ -130,7 +126,7 @@ src/lcars_rag/
 Built on top of these great projects:
 
 - [CocoIndex](https://github.com/cocoindex-io/cocoindex) -- embedding pipeline framework with live update support
-- omnichunk -- structure-aware chunking toolkit used by the pipeline
+- [omnichunk](https://github.com/oguzhankir/omnichunk) -- structure-aware chunking toolkit used by the pipeline
 - [Qdrant](https://github.com/qdrant/qdrant) -- vector search engine
 - [Qdrant MCP Server](https://github.com/qdrant/mcp-server-qdrant) -- official MCP server for Qdrant
 - [FastMCP](https://github.com/jlowin/fastmcp) -- fast, Pythonic MCP server framework
