@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS MCP Tools</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #e0e0e0; padding: 1.5rem; }
+  h1 { color: #f9a825; margin-bottom: 0.5rem; }
+  h2 { color: #f9a825; font-size: 1rem; margin-bottom: 0.6rem; }
+  nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  nav a { text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #333; color: #888; background: #1a1a2e; }
+  nav a.active { color: #f9a825; font-weight: bold; border-color: #f9a825; background: #252540; }
+  .meta { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+  .status-card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 1rem 1.2rem; border-left: 4px solid #333; margin-bottom: 1.2rem; }
+  .status-card.ok { border-left-color: #4caf50; }
+  .status-card.error { border-left-color: #f44336; }
+  .status-card .title { color: #f9a825; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.4rem; }
+  .status-card .body { font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .status-dot.ok { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+  .status-dot.error { background: #f44336; box-shadow: 0 0 6px #f44336; }
+  .status-dot.unknown { background: #666; }
+  .detail { color: #888; font-size: 0.75rem; margin-top: 0.4rem; word-break: break-all; }
+
+  .main { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 1rem; }
+  @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
+
+  .tool-list { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 0.8rem; max-height: 75vh; overflow-y: auto; }
+  .tool-item { padding: 0.6rem 0.8rem; border-radius: 4px; border: 1px solid #333; margin-bottom: 0.4rem; background: #111; cursor: pointer; }
+  .tool-item:hover { border-color: #f9a825; }
+  .tool-item.active { border-color: #f9a825; background: #252540; }
+  .tool-item .name { color: #f9a825; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.85rem; font-weight: bold; }
+  .tool-item .desc { color: #888; font-size: 0.75rem; margin-top: 0.25rem; line-height: 1.3; }
+
+  .runner { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 1rem; }
+  .runner .form-grid { display: grid; grid-template-columns: 160px 1fr; gap: 0.5rem 0.8rem; align-items: start; margin-bottom: 0.8rem; }
+  .runner label { color: #ccc; font-size: 0.8rem; padding-top: 0.4rem; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; }
+  .runner label .type { color: #666; font-size: 0.7rem; margin-left: 0.3rem; }
+  .runner label .req { color: #f44336; }
+  .runner input[type="text"], .runner input[type="number"], .runner textarea {
+    background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 4px;
+    padding: 0.4rem 0.6rem; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 0.8rem; width: 100%;
+  }
+  .runner textarea { min-height: 4rem; resize: vertical; }
+  .runner input[type="checkbox"] { accent-color: #f9a825; }
+  .runner .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.6rem 0 1rem 0; }
+  .runner button { background: #252540; color: #f9a825; border: 1px solid #f9a825; padding: 0.45rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; }
+  .runner button:hover { background: #333355; }
+  .runner button.preset { background: #1a1a2e; border-color: #333; color: #ccc; font-weight: normal; font-size: 0.75rem; padding: 0.3rem 0.7rem; }
+  .runner button.preset:hover { border-color: #f9a825; color: #f9a825; }
+  .runner .desc-block { color: #888; font-size: 0.8rem; line-height: 1.4; margin-bottom: 0.8rem; white-space: pre-wrap; }
+  .runner .hint { color: #666; font-size: 0.7rem; margin-top: 0.2rem; }
+
+  .results { background: #111; border: 1px solid #333; border-radius: 6px; padding: 0.8rem; margin-top: 0.6rem; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.78rem; line-height: 1.45; max-height: 55vh; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .results.error { color: #ff7777; }
+
+  .hit { background: #0d0d1d; border: 1px solid #2a2a45; border-left: 3px solid #f9a825; border-radius: 4px; padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; }
+  .hit .hit-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.35rem; flex-wrap: wrap; }
+  .hit .score { color: #4caf50; font-weight: bold; font-size: 0.75rem; }
+  .hit .src { color: #f9a825; font-size: 0.75rem; }
+  .hit .file { color: #ccc; font-size: 0.75rem; font-family: 'Cascadia Code', monospace; }
+  .hit .lang { color: #888; font-size: 0.7rem; }
+  .hit .chunk { color: #bbb; font-size: 0.75rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; border-top: 1px dashed #333; padding-top: 0.4rem; margin-top: 0.4rem; }
+
+  .empty { color: #666; font-size: 0.85rem; font-style: italic; padding: 0.8rem; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">Status</a>
+  <a href="/index">Index Monitor</a>
+  <a href="/sync-log">Sync Log</a>
+  <a href="/skip-report">Skip Report</a>
+  <a href="/mcp-tools" class="active">MCP Tools</a>
+</nav>
+<h1>LCARS MCP Tools</h1>
+<div class="meta" id="refresh-time">Loading...</div>
+
+<div class="status-card" id="mcp-status">
+  <div class="title">MCP Server</div>
+  <div class="body"><span class="status-dot unknown"></span>Checking...</div>
+  <div class="detail" id="mcp-status-detail"></div>
+</div>
+
+<div class="main">
+  <div>
+    <h2>Tools</h2>
+    <div class="tool-list" id="tool-list">
+      <div class="empty">Loading tools...</div>
+    </div>
+  </div>
+
+  <div class="runner" id="runner">
+    <div class="empty">Select a tool on the left to build a request.</div>
+  </div>
+</div>
+
+<script>
+const PRESETS = [
+  { label: 'list_sources()',                  tool: 'list_sources', args: {} },
+  { label: 'list_tags()',                     tool: 'list_tags',    args: {} },
+  { label: 'search("fastmcp transport", 5)',  tool: 'search',       args: { query: 'fastmcp transport', limit: 5 } },
+  { label: 'find_files("docker-compose")',    tool: 'find_files',   args: { filename: 'docker-compose' } },
+];
+
+let TOOLS = [];
+let SELECTED = null;
+
+function setStatus(state, msg, detail) {
+  const card = document.getElementById('mcp-status');
+  card.className = 'status-card ' + state;
+  card.querySelector('.body').innerHTML =
+    `<span class="status-dot ${state}"></span>${msg}`;
+  document.getElementById('mcp-status-detail').textContent = detail || '';
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/mcp/status');
+    const data = await r.json();
+    if (data.status === 'ok') {
+      setStatus('ok', `MCP reachable — ${data.tool_count} tools`, data.url || '');
+    } else {
+      setStatus('error', 'MCP error', `${data.detail || 'unknown'} (${data.url || ''})`);
+    }
+  } catch (e) {
+    setStatus('error', 'Status fetch failed', String(e));
+  }
+  document.getElementById('refresh-time').textContent =
+    'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+async function loadTools() {
+  const list = document.getElementById('tool-list');
+  try {
+    const r = await fetch('/api/mcp/tools');
+    const data = await r.json();
+    if (data.error) {
+      list.innerHTML = `<div class="empty">Error: ${data.error}</div>`;
+      return;
+    }
+    TOOLS = data.tools || [];
+    if (TOOLS.length === 0) {
+      list.innerHTML = `<div class="empty">No tools exposed.</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    TOOLS.forEach((t) => {
+      const div = document.createElement('div');
+      div.className = 'tool-item';
+      div.dataset.name = t.name;
+      div.innerHTML = `
+        <div class="name">${t.name}</div>
+        <div class="desc">${escapeHtml((t.description || '').split('\n')[0].slice(0, 120))}</div>
+      `;
+      div.onclick = () => selectTool(t.name);
+      list.appendChild(div);
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="empty">Fetch failed: ${escapeHtml(String(e))}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function selectTool(name) {
+  SELECTED = TOOLS.find((t) => t.name === name);
+  document.querySelectorAll('.tool-item').forEach((el) => {
+    el.classList.toggle('active', el.dataset.name === name);
+  });
+  renderRunner();
+}
+
+function fieldRow(key, prop, required) {
+  const type = prop.type || (prop.anyOf ? 'any' : 'string');
+  const desc = prop.description || '';
+  const reqMark = required ? '<span class="req">*</span>' : '';
+  const typeLabel = `<span class="type">${Array.isArray(type) ? type.join('|') : type}</span>`;
+  let input = '';
+  const id = `arg-${key}`;
+  if (type === 'boolean') {
+    input = `<input type="checkbox" id="${id}" data-key="${key}" data-kind="boolean">`;
+  } else if (type === 'integer' || type === 'number') {
+    input = `<input type="number" id="${id}" data-key="${key}" data-kind="${type}" placeholder="${prop.default ?? ''}">`;
+  } else if (type === 'array') {
+    input = `<input type="text" id="${id}" data-key="${key}" data-kind="array" placeholder="comma,separated,values">`;
+  } else if (type === 'object' || type === 'any') {
+    input = `<textarea id="${id}" data-key="${key}" data-kind="json" placeholder='{"...": "..."}'></textarea>`;
+  } else {
+    input = `<input type="text" id="${id}" data-key="${key}" data-kind="string" placeholder="${escapeHtml(prop.default ?? '')}">`;
+  }
+  const hint = desc ? `<div class="hint">${escapeHtml(desc)}</div>` : '';
+  return `
+    <label for="${id}">${escapeHtml(key)}${reqMark}${typeLabel}</label>
+    <div>${input}${hint}</div>
+  `;
+}
+
+function renderRunner() {
+  const runner = document.getElementById('runner');
+  if (!SELECTED) {
+    runner.innerHTML = `<div class="empty">Select a tool on the left to build a request.</div>`;
+    return;
+  }
+  const schema = SELECTED.inputSchema || {};
+  const props = schema.properties || {};
+  const required = new Set(schema.required || []);
+  const rows = Object.entries(props).map(([k, v]) => fieldRow(k, v, required.has(k))).join('');
+
+  const presetBtns = PRESETS
+    .filter((p) => p.tool === SELECTED.name || !props[Object.keys(p.args)[0]] === false || p.tool === SELECTED.name)
+    .filter((p) => p.tool === SELECTED.name)
+    .map((p, i) => `<button class="preset" data-preset-idx="${i}">${escapeHtml(p.label)}</button>`)
+    .join('');
+
+  runner.innerHTML = `
+    <h2>${escapeHtml(SELECTED.name)}</h2>
+    <div class="desc-block">${escapeHtml(SELECTED.description || '')}</div>
+    <div class="form-grid">${rows || '<div class="empty" style="grid-column:1/-1;">No arguments.</div>'}</div>
+    <div class="actions">
+      <button id="run-btn">Run</button>
+      ${presetBtns ? '<span style="color:#666;font-size:0.75rem;">Presets:</span>' + presetBtns : ''}
+    </div>
+    <div id="results" class="results" style="display:none;"></div>
+  `;
+  document.getElementById('run-btn').onclick = runTool;
+  runner.querySelectorAll('button.preset').forEach((btn) => {
+    btn.onclick = () => {
+      const idx = Number(btn.dataset.presetIdx);
+      const p = PRESETS.filter((x) => x.tool === SELECTED.name)[idx];
+      if (!p) return;
+      applyArgs(p.args);
+      runTool();
+    };
+  });
+}
+
+function applyArgs(args) {
+  Object.entries(args).forEach(([k, v]) => {
+    const el = document.getElementById(`arg-${k}`);
+    if (!el) return;
+    const kind = el.dataset.kind;
+    if (kind === 'boolean') el.checked = !!v;
+    else if (kind === 'array') el.value = Array.isArray(v) ? v.join(',') : String(v);
+    else if (kind === 'json') el.value = typeof v === 'string' ? v : JSON.stringify(v);
+    else el.value = v;
+  });
+}
+
+function collectArgs() {
+  const out = {};
+  document.querySelectorAll('#runner [data-key]').forEach((el) => {
+    const key = el.dataset.key;
+    const kind = el.dataset.kind;
+    let val;
+    if (kind === 'boolean') { val = el.checked; if (!val) return; }
+    else if (kind === 'integer') { if (el.value === '') return; val = parseInt(el.value, 10); }
+    else if (kind === 'number') { if (el.value === '') return; val = parseFloat(el.value); }
+    else if (kind === 'array') {
+      if (el.value.trim() === '') return;
+      val = el.value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    else if (kind === 'json') {
+      if (el.value.trim() === '') return;
+      try { val = JSON.parse(el.value); }
+      catch (e) { throw new Error(`${key}: invalid JSON — ${e.message}`); }
+    }
+    else { if (el.value === '') return; val = el.value; }
+    out[key] = val;
+  });
+  return out;
+}
+
+async function runTool() {
+  if (!SELECTED) return;
+  const resultsEl = document.getElementById('results');
+  resultsEl.style.display = 'block';
+  resultsEl.classList.remove('error');
+  resultsEl.textContent = 'Running…';
+
+  let args;
+  try { args = collectArgs(); }
+  catch (e) {
+    resultsEl.classList.add('error');
+    resultsEl.textContent = String(e.message || e);
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/mcp/call', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: SELECTED.name, arguments: args }),
+    });
+    const data = await r.json();
+    if (data.error) {
+      resultsEl.classList.add('error');
+      resultsEl.textContent = data.error;
+      return;
+    }
+    renderResult(data.result, resultsEl);
+  } catch (e) {
+    resultsEl.classList.add('error');
+    resultsEl.textContent = String(e);
+  }
+}
+
+function renderResult(result, el) {
+  // MCP tool call results come back as a list of content blocks:
+  // [{type: "text", text: "..."}, ...]
+  if (!Array.isArray(result) || result.length === 0) {
+    el.textContent = JSON.stringify(result, null, 2);
+    return;
+  }
+  const texts = result
+    .filter((c) => c && c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text);
+
+  // Try to parse each text block as JSON for nicer rendering
+  let parsed = null;
+  try { parsed = JSON.parse(texts.join('\n')); }
+  catch { /* leave as raw text */ }
+
+  if (SELECTED && SELECTED.name === 'search' && Array.isArray(parsed)) {
+    el.innerHTML = parsed.map(renderSearchHit).join('') ||
+      '<div class="empty">No results.</div>';
+    return;
+  }
+
+  if (parsed !== null) {
+    el.textContent = JSON.stringify(parsed, null, 2);
+  } else {
+    el.textContent = texts.length ? texts.join('\n\n') : JSON.stringify(result, null, 2);
+  }
+}
+
+function renderSearchHit(hit) {
+  const score = hit.score != null ? hit.score.toFixed(4) : '';
+  const chunk = hit.chunk_text || '';
+  const truncated = chunk.length > 800 ? chunk.slice(0, 800) + '…' : chunk;
+  return `
+    <div class="hit">
+      <div class="hit-head">
+        <span class="src">${escapeHtml(hit.source_name || '')}</span>
+        <span class="score">${score}</span>
+      </div>
+      <div class="hit-head">
+        <span class="file">${escapeHtml(hit.filename || '')}</span>
+        <span class="lang">${escapeHtml(hit.language || '')} · ${escapeHtml(hit.content_type || '')}</span>
+      </div>
+      <div class="chunk">${escapeHtml(truncated)}</div>
+    </div>
+  `;
+}
+
+loadStatus();
+loadTools();
+setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>
