@@ -1,5 +1,6 @@
-"""LCARS Dashboard - web UI for status, reports, and index monitoring."""
+"""LCARS Dashboard - web UI for status, reports, index monitoring, and MCP tools."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ from lcars_rag.config import (
     LOGS_DIR,
     QDRANT_URL,
 )
+from lcars_rag.mcp_client import call_tool, connect_and_list_tools
 
 app = Flask(__name__, template_folder="../../templates")
 
@@ -393,10 +395,112 @@ def skip_report_rows():
     return jsonify({"rows": rows, "total": total, "offset": offset, "limit": limit})
 
 
+# ---------------------------------------------------------------------------
+# MCP tools routes
+# ---------------------------------------------------------------------------
+
+
+def _mcp_internal_url() -> str:
+    """URL the dashboard uses to call the embedded MCP server over HTTP.
+
+    Points at the same uvicorn process this Flask app is mounted into,
+    so the dashboard exercises the real /mcp/http surface that external
+    clients use.
+    """
+    port = os.environ.get("LCARS_DASHBOARD_PORT", os.environ.get("SKIP_REPORT_PORT", "5001"))
+    default = f"http://127.0.0.1:{port}/mcp/http/"
+    return os.environ.get("LCARS_MCP_INTERNAL_URL", default)
+
+
+@app.route("/mcp-tools")
+def mcp_tools_page():
+    return render_template("mcp_tools.html")
+
+
+@app.route("/api/mcp/status")
+def api_mcp_status():
+    url = _mcp_internal_url()
+    try:
+        tools = asyncio.run(connect_and_list_tools(url))
+        return jsonify({"status": "ok", "tool_count": len(tools), "url": url})
+    except Exception as e:
+        return jsonify({"status": "error", "detail": str(e), "url": url})
+
+
+@app.route("/api/mcp/tools")
+def api_mcp_tools():
+    url = _mcp_internal_url()
+    try:
+        return jsonify({"tools": asyncio.run(connect_and_list_tools(url)), "url": url})
+    except Exception as e:
+        return jsonify({"error": str(e), "url": url}), 500
+
+
+@app.route("/api/mcp/call", methods=["POST"])
+def api_mcp_call():
+    data = request.get_json(force=True, silent=True) or {}
+    name = data.get("name")
+    arguments = data.get("arguments") or {}
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    url = _mcp_internal_url()
+    try:
+        result = asyncio.run(call_tool(url, name, arguments))
+        return jsonify({"result": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# ASGI composition — serves Flask + FastMCP on the same port
+# ---------------------------------------------------------------------------
+
+import contextlib  # noqa: E402
+
+from asgiref.wsgi import WsgiToAsgi  # noqa: E402
+from starlette.applications import Starlette  # noqa: E402
+from starlette.routing import Mount  # noqa: E402
+
+from lcars_mcp_server import mcp as _lcars_mcp  # noqa: E402
+
+_mcp_http_app = _lcars_mcp.http_app(path="/", transport="streamable-http")
+_mcp_sse_app = _lcars_mcp.http_app(path="/", transport="sse")
+
+
+@contextlib.asynccontextmanager
+async def _combined_lifespan(_app):
+    # Each FastMCP sub-app has its own lifespan context that the underlying
+    # server uses reference counting for, so it's safe to enter both.
+    async with _mcp_http_app.lifespan(_mcp_http_app), \
+               _mcp_sse_app.lifespan(_mcp_sse_app):
+        yield
+
+
+asgi_app = Starlette(
+    routes=[
+        Mount("/mcp/http", app=_mcp_http_app),
+        Mount("/mcp/sse", app=_mcp_sse_app),
+        Mount("/", app=WsgiToAsgi(app)),  # Flask catch-all MUST be last
+    ],
+    lifespan=_combined_lifespan,
+)
+
+
 def main():
+    import uvicorn
+
     port = int(os.environ.get("LCARS_DASHBOARD_PORT", os.environ.get("SKIP_REPORT_PORT", 5001)))
-    print(f"Starting LCARS Dashboard on http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    reload_flag = os.environ.get("LCARS_DASHBOARD_RELOAD") == "1"
+    print(f"Starting LCARS Dashboard + MCP on http://0.0.0.0:{port}")
+    print(f"  MCP streamable HTTP: http://0.0.0.0:{port}/mcp/http/")
+    print(f"  MCP SSE:             http://0.0.0.0:{port}/mcp/sse/")
+    uvicorn.run(
+        "lcars_rag.dashboard:asgi_app",
+        host="0.0.0.0",
+        port=port,
+        reload=reload_flag,
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":
