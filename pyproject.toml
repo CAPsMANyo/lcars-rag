@@ -16,7 +16,7 @@ dependencies = [
     "qdrant-client",
 
     # Embedding
-    "cocoindex>=0.3.28",
+    "cocoindex>=0.3.37",
 
     # Chunking
     "omnichunk",
