@@ -6,15 +6,28 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
+    groups:
+      actions-deps:
+        patterns: ["*"]
 
   # Python (pip ecosystem — works with uv.lock / pyproject.toml)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
+    groups:
+      actions-deps:
+        patterns: ["*"]
+
 
   # Docker
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
+    groups:
+      actions-deps:
+        patterns: ["*"]
