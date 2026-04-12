@@ -11,11 +11,9 @@ from flask import Flask, render_template, request, jsonify
 from lcars_rag.config import (
     BASE_DIR,
     COCOINDEX_DATABASE_URL,
-    EMBEDDING_API_ADDRESS,
     LOGS_DIR,
     QDRANT_URL,
 )
-from lcars_rag.mcp_client import call_tool, connect_and_list_tools
 
 app = Flask(__name__, template_folder="../../templates")
 
@@ -68,10 +66,12 @@ SYNC_STATE_FILE = os.path.join(LOGS_DIR, "sync_state.json")
 
 def _check_embedding():
     """Check if the embedding endpoint is reachable."""
-    if not EMBEDDING_API_ADDRESS:
-        return {"status": "unconfigured", "detail": "EMBEDDING_API_ADDRESS not set"}
+    from lcars_rag import config
+    addr = config.EMBEDDING_API_ADDRESS
+    if not addr:
+        return {"status": "unconfigured", "detail": "embedding_api_address not set"}
     # TEI exposes model info at the base URL (strip /v1 suffix)
-    base = EMBEDDING_API_ADDRESS.rstrip("/")
+    base = addr.rstrip("/")
     if base.endswith("/v1"):
         base = base[:-3]
     try:
@@ -268,6 +268,39 @@ def trigger_index_update():
     return jsonify({"ok": True})
 
 
+def _run_drop():
+    """Stop daemon, drop cocoindex index, restart daemon."""
+    import subprocess
+    _stop_cocoindex_daemon()
+    with open(COCOINDEX_LOG, "a") as log:
+        log.write("\n=== COCOINDEX DROP INITIATED ===\n")
+        log.flush()
+        proc = subprocess.Popen(
+            ["uv", "run", "cocoindex", "drop", "-f", "src/lcars_rag/flow.py"],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            cwd="/app",
+        )
+        proc.wait()
+        log.write("=== COCOINDEX DROP COMPLETE ===\n")
+    _start_cocoindex_daemon()
+
+
+@app.route("/api/index/drop", methods=["POST"])
+def drop_index():
+    """Drop the entire cocoindex index. Requires confirmation."""
+    import threading
+    data = request.get_json(force=True, silent=True) or {}
+    if data.get("confirm") != "DROP ALL DATA":
+        return jsonify({"error": "Confirmation required"}), 400
+    # Reject if an update is currently running
+    update_status, _ = check_process_status(COCOINDEX_UPDATE_PID_FILE)
+    if update_status == "running":
+        return jsonify({"ok": False, "error": "An update is currently running"}), 409
+    threading.Thread(target=_run_drop, daemon=True).start()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/index/logs")
 def index_logs():
     lines = int(request.args.get("lines", 200))
@@ -396,20 +429,96 @@ def skip_report_rows():
 
 
 # ---------------------------------------------------------------------------
+# Config editor routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/config")
+def config_page():
+    return render_template("config.html")
+
+
+@app.route("/api/config")
+def api_config_read():
+    from lcars_rag.config import CONFIG_PATH
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except FileNotFoundError:
+        return jsonify({"error": "config.yml not found"}), 404
+
+
+@app.route("/api/config", methods=["POST"])
+def api_config_save():
+    import yaml
+    from lcars_rag.config import CONFIG_PATH, reload_config
+
+    data = request.get_json(force=True, silent=True) or {}
+    content = data.get("content")
+    if content is None:
+        return jsonify({"error": "content required"}), 400
+
+    # Validate YAML
+    try:
+        parsed = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        return jsonify({"error": f"Invalid YAML: {e}"}), 400
+
+    if not isinstance(parsed, dict):
+        return jsonify({"error": "Config must be a YAML mapping"}), 400
+    if "settings" not in parsed:
+        return jsonify({"error": "Config must contain a 'settings' key"}), 400
+
+    with open(CONFIG_PATH, "w") as f:
+        f.write(content)
+
+    reload_config()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/config/patterns")
+def api_patterns_read():
+    try:
+        with open("patterns.yml", "r") as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except FileNotFoundError:
+        return jsonify({"error": "patterns.yml not found"}), 404
+
+
+@app.route("/api/config/patterns", methods=["POST"])
+def api_patterns_save():
+    import yaml
+
+    data = request.get_json(force=True, silent=True) or {}
+    content = data.get("content")
+    if content is None:
+        return jsonify({"error": "content required"}), 400
+
+    try:
+        parsed = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        return jsonify({"error": f"Invalid YAML: {e}"}), 400
+
+    if not isinstance(parsed, dict):
+        return jsonify({"error": "Patterns must be a YAML mapping"}), 400
+
+    with open("patterns.yml", "w") as f:
+        f.write(content)
+
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # MCP tools routes
 # ---------------------------------------------------------------------------
 
 
-def _mcp_internal_url() -> str:
-    """URL the dashboard uses to call the embedded MCP server over HTTP.
-
-    Points at the same uvicorn process this Flask app is mounted into,
-    so the dashboard exercises the real /mcp/http surface that external
-    clients use.
-    """
-    port = os.environ.get("LCARS_DASHBOARD_PORT", os.environ.get("SKIP_REPORT_PORT", "5001"))
-    default = f"http://127.0.0.1:{port}/mcp/http/"
-    return os.environ.get("LCARS_MCP_INTERNAL_URL", default)
+def _mcp_url() -> str:
+    """URL of the external MCP server used for tool testing."""
+    from lcars_rag import config
+    return config.MCP_SERVER_URL
 
 
 @app.route("/mcp-tools")
@@ -419,7 +528,10 @@ def mcp_tools_page():
 
 @app.route("/api/mcp/status")
 def api_mcp_status():
-    url = _mcp_internal_url()
+    from lcars_rag.mcp_client import connect_and_list_tools
+    url = _mcp_url()
+    if not url:
+        return jsonify({"status": "unconfigured", "detail": "mcp_server_url not set in config.yml"})
     try:
         tools = asyncio.run(connect_and_list_tools(url))
         return jsonify({"status": "ok", "tool_count": len(tools), "url": url})
@@ -429,7 +541,10 @@ def api_mcp_status():
 
 @app.route("/api/mcp/tools")
 def api_mcp_tools():
-    url = _mcp_internal_url()
+    from lcars_rag.mcp_client import connect_and_list_tools
+    url = _mcp_url()
+    if not url:
+        return jsonify({"error": "mcp_server_url not set in config.yml"}), 400
     try:
         return jsonify({"tools": asyncio.run(connect_and_list_tools(url)), "url": url})
     except Exception as e:
@@ -438,12 +553,15 @@ def api_mcp_tools():
 
 @app.route("/api/mcp/call", methods=["POST"])
 def api_mcp_call():
+    from lcars_rag.mcp_client import call_tool
     data = request.get_json(force=True, silent=True) or {}
     name = data.get("name")
     arguments = data.get("arguments") or {}
     if not name:
         return jsonify({"error": "name required"}), 400
-    url = _mcp_internal_url()
+    url = _mcp_url()
+    if not url:
+        return jsonify({"error": "mcp_server_url not set in config.yml"}), 400
     try:
         result = asyncio.run(call_tool(url, name, arguments))
         return jsonify({"result": result})
@@ -452,38 +570,12 @@ def api_mcp_call():
 
 
 # ---------------------------------------------------------------------------
-# ASGI composition — serves Flask + FastMCP on the same port
+# ASGI wrapper — serves Flask via uvicorn
 # ---------------------------------------------------------------------------
 
-import contextlib  # noqa: E402
-
 from asgiref.wsgi import WsgiToAsgi  # noqa: E402
-from starlette.applications import Starlette  # noqa: E402
-from starlette.routing import Mount  # noqa: E402
 
-from lcars_mcp_server import mcp as _lcars_mcp  # noqa: E402
-
-_mcp_http_app = _lcars_mcp.http_app(path="/", transport="streamable-http")
-_mcp_sse_app = _lcars_mcp.http_app(path="/", transport="sse")
-
-
-@contextlib.asynccontextmanager
-async def _combined_lifespan(_app):
-    # Each FastMCP sub-app has its own lifespan context that the underlying
-    # server uses reference counting for, so it's safe to enter both.
-    async with _mcp_http_app.lifespan(_mcp_http_app), \
-               _mcp_sse_app.lifespan(_mcp_sse_app):
-        yield
-
-
-asgi_app = Starlette(
-    routes=[
-        Mount("/mcp/http", app=_mcp_http_app),
-        Mount("/mcp/sse", app=_mcp_sse_app),
-        Mount("/", app=WsgiToAsgi(app)),  # Flask catch-all MUST be last
-    ],
-    lifespan=_combined_lifespan,
-)
+asgi_app = WsgiToAsgi(app)
 
 
 def main():
@@ -491,9 +583,7 @@ def main():
 
     port = int(os.environ.get("LCARS_DASHBOARD_PORT", os.environ.get("SKIP_REPORT_PORT", 5001)))
     reload_flag = os.environ.get("LCARS_DASHBOARD_RELOAD") == "1"
-    print(f"Starting LCARS Dashboard + MCP on http://0.0.0.0:{port}")
-    print(f"  MCP streamable HTTP: http://0.0.0.0:{port}/mcp/http/")
-    print(f"  MCP SSE:             http://0.0.0.0:{port}/mcp/sse/")
+    print(f"Starting LCARS Dashboard on http://0.0.0.0:{port}")
     uvicorn.run(
         "lcars_rag.dashboard:asgi_app",
         host="0.0.0.0",
