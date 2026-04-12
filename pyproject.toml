@@ -26,7 +26,7 @@ dependencies = [
     "requests>=2.31.0",
 
     # MCP client (for MCP test page)
-    "mcp>=1.0.0",
+    "mcp>=1.27.0",
 
     # MCP server (mounted into the dashboard at /mcp/http and /mcp/sse)
     "lcars-mcp-server @ git+https://github.com/CAPsMANyo/lcars-mcp-server.git@main",
