@@ -2,14 +2,35 @@
 # Secrets and connection strings (DB URLs, API keys) belong in .env
 
 settings:
+  # Embedding
+  embedding_api_address: http://localhost:11434/v1
+  embedding_model: hf.co/jinaai/jina-code-embeddings-1.5b-GGUF:BF16
   embedding_dimension: 1024
-  max_file_size: 100000
+
+  # Chunking
   chunk_size: 1000
   chunk_overlap: 200
-  refresh_interval: 30
-  sync_interval: 3600
+
+  # Filtering
+  max_file_size: 100000
   use_exclude_patterns: true
+
+  # CocoIndex
+  refresh_interval: 30
+  max_inflight_rows: 25
   metadata_table: source_metadata
+
+  # Sync
+  sync_interval: 3600
+
+  # MCP server (external — used by the MCP tools test page)
+  mcp_server_url: http://localhost:8000/mcp/http/
+
+  # Reranking (optional, used by external MCP server)
+  # rerank_enabled: false
+  # rerank_model: bge-reranker-v2-m3
+  # rerank_api_address: http://localhost:8787
+  # rerank_top_n: 0
 
 git_sources:
   # - url: https://github.com/githubtraining/hellogitworld.git
