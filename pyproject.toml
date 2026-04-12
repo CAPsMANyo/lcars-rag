@@ -22,7 +22,7 @@ dependencies = [
     "omnichunk",
 
     # Web UI
-    "flask>=3.0.0",
+    "flask>=3.1.3",
     "requests>=2.31.0",
 
     # MCP client (for MCP test page)
