@@ -5,7 +5,7 @@ description = "LCARS RAG embedding pipeline using CocoIndex"
 requires-python = ">=3.12"
 dependencies = [
     # Core
-    "PyYAML>=6.0",
+    "PyYAML>=6.0.3",
     "python-dotenv>=1.2.2",
 
     # Database & Vector Storage
