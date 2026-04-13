@@ -12,12 +12,14 @@ SYNC_STATE_FILE="$LOGS_DIR/sync_state.json"
 SYNC_WATCH_PID_FILE="$LOGS_DIR/sync_watch.pid"
 COCOINDEX_LOG="$LOGS_DIR/cocoindex.log"
 COCOINDEX_PID_FILE="$LOGS_DIR/cocoindex.pid"
+MCP_SERVER_LOG="$LOGS_DIR/mcp_server.log"
+MCP_SERVER_PID_FILE="$LOGS_DIR/mcp_server.pid"
 
 # Read sync_interval from config.yml (default: 1 hour)
 SYNC_INTERVAL=$(grep 'sync_interval:' /app/config.yml 2>/dev/null | awk '{print $2}')
 SYNC_INTERVAL="${SYNC_INTERVAL:-3600}"
 
-touch "$SYNC_LOG" "$COCOINDEX_LOG"
+touch "$SYNC_LOG" "$COCOINDEX_LOG" "$MCP_SERVER_LOG"
 
 # --- Write sync state as JSON ---
 write_sync_state() {
@@ -54,6 +56,29 @@ start_cocoindex() {
     COCOINDEX_PID=$!
     echo "$COCOINDEX_PID" > "$COCOINDEX_PID_FILE"
     echo "[entrypoint] cocoindex started with PID $COCOINDEX_PID"
+}
+
+# --- Start/restart MCP server ---
+start_mcp_server() {
+    if [ -f "$MCP_SERVER_PID_FILE" ]; then
+        OLD_PID=$(cat "$MCP_SERVER_PID_FILE")
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "[entrypoint] Stopping MCP server (PID $OLD_PID)..."
+            kill "$OLD_PID" 2>/dev/null || true
+            wait "$OLD_PID" 2>/dev/null || true
+        fi
+    fi
+    MCP_PORT=$(grep 'mcp_server_url:' /app/config.yml 2>/dev/null | grep -o ':[0-9]*/' | tr -d ':/')
+    MCP_PORT="${MCP_PORT:-8000}"
+    echo "[entrypoint] Starting MCP server on port $MCP_PORT..."
+    uv run python -m lcars_mcp_server \
+        --transport streamable-http \
+        --host 0.0.0.0 \
+        --port "$MCP_PORT" \
+        > "$MCP_SERVER_LOG" 2>&1 &
+    MCP_SERVER_PID=$!
+    echo "$MCP_SERVER_PID" > "$MCP_SERVER_PID_FILE"
+    echo "[entrypoint] MCP server started with PID $MCP_SERVER_PID"
 }
 
 # --- Run repo sync (with lock) ---
@@ -140,6 +165,9 @@ echo "[entrypoint] sync watcher started with PID $SYNC_WATCH_PID"
 
 # --- Initial cocoindex start ---
 start_cocoindex
+
+# --- MCP server (background) ---
+start_mcp_server
 
 # --- Dashboard (foreground) ---
 echo "[entrypoint] Starting LCARS dashboard..."

@@ -85,6 +85,11 @@
   <div class="title">MCP Server</div>
   <div class="body"><span class="status-dot unknown"></span>Checking...</div>
   <div class="detail" id="mcp-status-detail"></div>
+  <div style="margin-top:0.5rem;display:flex;gap:0.4rem" id="mcp-server-actions">
+    <button onclick="mcpServerAction('start')" id="btn-mcp-start" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:#252540;color:#4caf50;border:1px solid #4caf50;border-radius:4px;cursor:pointer;display:none">Start</button>
+    <button onclick="mcpServerAction('stop')" id="btn-mcp-stop" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:#252540;color:#f44336;border:1px solid #f44336;border-radius:4px;cursor:pointer;display:none">Stop</button>
+    <button onclick="mcpServerAction('restart')" id="btn-mcp-restart" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:#252540;color:#f9a825;border:1px solid #f9a825;border-radius:4px;cursor:pointer;display:none">Restart</button>
+  </div>
 </div>
 
 <div class="main">
@@ -119,20 +124,43 @@ function setStatus(state, msg, detail) {
   document.getElementById('mcp-status-detail').textContent = detail || '';
 }
 
+function showServerButtons(running) {
+  document.getElementById('btn-mcp-start').style.display = running ? 'none' : '';
+  document.getElementById('btn-mcp-stop').style.display = running ? '' : 'none';
+  document.getElementById('btn-mcp-restart').style.display = running ? '' : 'none';
+}
+
 async function loadStatus() {
   try {
     const r = await fetch('/api/mcp/status');
     const data = await r.json();
     if (data.status === 'ok') {
       setStatus('ok', `MCP reachable — ${data.tool_count} tools`, data.url || '');
+      showServerButtons(true);
     } else {
       setStatus('error', 'MCP error', `${data.detail || 'unknown'} (${data.url || ''})`);
+      showServerButtons(false);
     }
   } catch (e) {
     setStatus('error', 'Status fetch failed', String(e));
+    showServerButtons(false);
   }
   document.getElementById('refresh-time').textContent =
     'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+async function mcpServerAction(action) {
+  try {
+    const r = await fetch(`/api/mcp/server/${action}`, { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok && data.error) {
+      setStatus('error', data.error, '');
+    }
+  } catch (e) {
+    setStatus('error', 'Action failed', String(e));
+  }
+  // Give the server a moment to start/stop, then refresh
+  setTimeout(() => { loadStatus(); loadTools(); }, 1500);
 }
 
 async function loadTools() {

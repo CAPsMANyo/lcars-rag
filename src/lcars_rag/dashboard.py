@@ -62,6 +62,8 @@ def tail_log(log_file, lines=200, offset=0):
 COCOINDEX_PID_FILE = os.path.join(LOGS_DIR, "cocoindex.pid")
 SYNC_WATCH_PID_FILE = os.path.join(LOGS_DIR, "sync_watch.pid")
 SYNC_STATE_FILE = os.path.join(LOGS_DIR, "sync_state.json")
+MCP_SERVER_PID_FILE = os.path.join(LOGS_DIR, "mcp_server.pid")
+MCP_SERVER_LOG = os.path.join(LOGS_DIR, "mcp_server.log")
 
 
 def _check_embedding():
@@ -130,6 +132,7 @@ def api_status():
         "postgres": _check_postgres(),
         "qdrant": _check_qdrant(),
         "cocoindex": _check_process(COCOINDEX_PID_FILE, "cocoindex"),
+        "mcp_server": _check_process(MCP_SERVER_PID_FILE, "mcp_server"),
         "sync": _get_sync_state(),
         "sync_watcher": _check_process(SYNC_WATCH_PID_FILE, "sync_watcher"),
     })
@@ -511,12 +514,97 @@ def api_patterns_save():
 
 
 # ---------------------------------------------------------------------------
+# MCP server process management
+# ---------------------------------------------------------------------------
+
+
+def _mcp_server_port() -> int:
+    """Parse port from config mcp_server_url, default 8000."""
+    from lcars_rag import config
+    url = config.MCP_SERVER_URL
+    if url:
+        try:
+            from urllib.parse import urlparse
+            return urlparse(url).port or 8000
+        except Exception:
+            pass
+    return 8000
+
+
+def _stop_mcp_server():
+    """Stop the MCP server subprocess if running."""
+    status, pid = check_process_status(MCP_SERVER_PID_FILE)
+    if status == "running" and pid:
+        import signal
+        os.kill(pid, signal.SIGTERM)
+        for _ in range(50):  # up to 5 seconds
+            import time
+            time.sleep(0.1)
+            s, _ = check_process_status(MCP_SERVER_PID_FILE)
+            if s != "running":
+                break
+
+
+def _start_mcp_server():
+    """Start the MCP server as a background subprocess."""
+    import subprocess
+    port = _mcp_server_port()
+    with open(MCP_SERVER_LOG, "a") as log:
+        proc = subprocess.Popen(
+            [
+                "uv", "run", "python", "-m", "lcars_mcp_server",
+                "--transport", "streamable-http",
+                "--host", "0.0.0.0",
+                "--port", str(port),
+            ],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            cwd="/app",
+        )
+    with open(MCP_SERVER_PID_FILE, "w") as f:
+        f.write(str(proc.pid))
+
+
+@app.route("/api/mcp/server/start", methods=["POST"])
+def api_mcp_server_start():
+    status, _ = check_process_status(MCP_SERVER_PID_FILE)
+    if status == "running":
+        return jsonify({"ok": False, "error": "MCP server already running"}), 409
+    _start_mcp_server()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/mcp/server/stop", methods=["POST"])
+def api_mcp_server_stop():
+    status, _ = check_process_status(MCP_SERVER_PID_FILE)
+    if status != "running":
+        return jsonify({"ok": False, "error": "MCP server not running"}), 409
+    _stop_mcp_server()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/mcp/server/restart", methods=["POST"])
+def api_mcp_server_restart():
+    _stop_mcp_server()
+    _start_mcp_server()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/mcp/server/logs")
+def mcp_server_logs():
+    lines = int(request.args.get("lines", 200))
+    offset = int(request.args.get("offset", 0))
+    content, new_offset = tail_log(MCP_SERVER_LOG, lines, offset)
+    return jsonify({"content": content, "offset": new_offset})
+
+
+# ---------------------------------------------------------------------------
 # MCP tools routes
 # ---------------------------------------------------------------------------
 
 
 def _mcp_url() -> str:
-    """URL of the external MCP server used for tool testing."""
+    """URL of the MCP server subprocess used for tool testing."""
     from lcars_rag import config
     return config.MCP_SERVER_URL
 

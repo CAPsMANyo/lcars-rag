@@ -23,14 +23,8 @@ settings:
   # Sync
   sync_interval: 3600
 
-  # MCP server (external — used by the MCP tools test page)
+  # MCP server (spawned as subprocess — see .env for its settings)
   mcp_server_url: http://localhost:8000/mcp/http/
-
-  # Reranking (optional, used by external MCP server)
-  # rerank_enabled: false
-  # rerank_model: bge-reranker-v2-m3
-  # rerank_api_address: http://localhost:8787
-  # rerank_top_n: 0
 
 git_sources:
   # - url: https://github.com/githubtraining/hellogitworld.git
