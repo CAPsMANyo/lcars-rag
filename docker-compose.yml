@@ -29,6 +29,7 @@ services:
     restart: unless-stopped
     ports:
       - "5001:5001"
+      - "8000:8000"  # MCP server (streamable-http)
     volumes:
       - ./data:/app/data
       - ./config.yml:/app/config.yml
