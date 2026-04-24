@@ -15,10 +15,12 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
+CONFIG_PATH = os.environ.get("LCARS_CONFIG_PATH", "config.yml")
+
 
 def load_config():
     """Load configuration from config.yml."""
-    with open("config.yml", "r") as f:
+    with open(CONFIG_PATH, "r") as f:
         return yaml.safe_load(f)
 
 
@@ -57,11 +59,11 @@ for _d in (REPOS_DIR, LOGS_DIR):
 # Secrets and connection strings from .env
 QDRANT_URL = os.environ.get("QDRANT_URL")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL")
-EMBEDDING_API_ADDRESS = os.environ.get("EMBEDDING_API_ADDRESS")
 COCOINDEX_DATABASE_URL = os.environ.get("COCOINDEX_DATABASE_URL", "")
 
-# Tunable settings from config.yml
+# Tunable settings from config.yml (with .env fallback for backward compat)
+EMBEDDING_MODEL = SETTINGS.get("embedding_model", os.environ.get("EMBEDDING_MODEL", ""))
+EMBEDDING_API_ADDRESS = SETTINGS.get("embedding_api_address", os.environ.get("EMBEDDING_API_ADDRESS", ""))
 EMBEDDING_DIMENSION = int(SETTINGS.get("embedding_dimension", 1024))
 USE_EXCLUDE_PATTERNS = bool(SETTINGS.get("use_exclude_patterns", True))
 MAX_FILE_SIZE = int(SETTINGS.get("max_file_size", 100000))
@@ -70,6 +72,7 @@ CHUNK_OVERLAP = int(SETTINGS.get("chunk_overlap", 200))
 REFRESH_INTERVAL = int(SETTINGS.get("refresh_interval", 30))
 SYNC_INTERVAL = int(SETTINGS.get("sync_interval", 3600))
 METADATA_TABLE = SETTINGS.get("metadata_table", "source_metadata")
+MAX_INFLIGHT_ROWS = int(SETTINGS.get("max_inflight_rows", 25))
 
 LANGUAGE_MAP = {
     ".py": "python", ".rs": "rust", ".js": "javascript", ".ts": "typescript",
@@ -82,3 +85,31 @@ LANGUAGE_MAP = {
     ".md": "markdown", ".mdx": "markdown", ".adoc": "asciidoc",
     ".txt": "text", ".toml": "toml", ".ini": "ini",
 }
+
+
+def reload_config():
+    """Re-read config.yml and update module-level settings.
+
+    Called by the config editor after saving changes so the running
+    dashboard picks up new values without a restart.
+    """
+    global CONFIG, SETTINGS
+    global EMBEDDING_MODEL, EMBEDDING_API_ADDRESS, EMBEDDING_DIMENSION
+    global USE_EXCLUDE_PATTERNS, MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP
+    global REFRESH_INTERVAL, SYNC_INTERVAL, METADATA_TABLE
+    global MAX_INFLIGHT_ROWS
+
+    CONFIG = load_config()
+    SETTINGS = CONFIG.get("settings", {})
+
+    EMBEDDING_MODEL = SETTINGS.get("embedding_model", os.environ.get("EMBEDDING_MODEL", ""))
+    EMBEDDING_API_ADDRESS = SETTINGS.get("embedding_api_address", os.environ.get("EMBEDDING_API_ADDRESS", ""))
+    EMBEDDING_DIMENSION = int(SETTINGS.get("embedding_dimension", 1024))
+    USE_EXCLUDE_PATTERNS = bool(SETTINGS.get("use_exclude_patterns", True))
+    MAX_FILE_SIZE = int(SETTINGS.get("max_file_size", 100000))
+    CHUNK_SIZE = int(SETTINGS.get("chunk_size", 1000))
+    CHUNK_OVERLAP = int(SETTINGS.get("chunk_overlap", 200))
+    REFRESH_INTERVAL = int(SETTINGS.get("refresh_interval", 30))
+    SYNC_INTERVAL = int(SETTINGS.get("sync_interval", 3600))
+    METADATA_TABLE = SETTINGS.get("metadata_table", "source_metadata")
+    MAX_INFLIGHT_ROWS = int(SETTINGS.get("max_inflight_rows", 25))

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS Config</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0a0a1a; color: #e0e0e0; padding: 1.5rem; display: flex; flex-direction: column; height: 100vh; }
+  h1 { color: #f9a825; margin-bottom: 0.5rem; }
+  nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  nav a { text-decoration: none; padding: 0.4rem 0.8rem; border-radius: 4px; border: 1px solid #333; color: #888; background: #1a1a2e; }
+  nav a.active { color: #f9a825; font-weight: bold; border-color: #f9a825; background: #252540; }
+
+  /* CodeMirror LCARS theme */
+  .cm-s-lcars.CodeMirror { background: #111; color: #e0e0e0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.85rem; height: auto; }
+  .cm-s-lcars .CodeMirror-gutters { background: #1a1a2e; border-right: 1px solid #333; }
+  .cm-s-lcars .CodeMirror-linenumber { color: #555; padding: 0 8px; }
+  .cm-s-lcars .CodeMirror-cursor { border-left-color: #f9a825; }
+  .cm-s-lcars .CodeMirror-selected { background: #252540 !important; }
+  .cm-s-lcars .CodeMirror-activeline-background { background: #151528; }
+  .cm-s-lcars .cm-atom { color: #f9a825; }
+  .cm-s-lcars .cm-number { color: #4caf50; }
+  .cm-s-lcars .cm-comment { color: #666; font-style: italic; }
+  .cm-s-lcars .cm-meta { color: #f9a825; }
+  .cm-s-lcars .cm-string { color: #81c784; }
+  .cm-s-lcars .cm-keyword { color: #f9a825; }
+  .cm-s-lcars .cm-def { color: #e0e0e0; }
+
+  .editor-wrap { flex: 1; border: 1px solid #333; border-radius: 6px; overflow: hidden; min-height: 300px; }
+  .editor-wrap .CodeMirror { height: 100%; }
+
+  /* Fallback textarea (shown if CodeMirror fails to load) */
+  #fallback-editor { display: none; width: 100%; height: 100%; background: #111; color: #e0e0e0; border: none; padding: 0.8rem; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 0.85rem; resize: none; }
+
+  .toolbar { display: flex; align-items: center; gap: 1rem; margin-top: 0.8rem; flex-wrap: wrap; }
+  .toolbar button { padding: 0.5rem 1.5rem; border-radius: 4px; font-size: 0.9rem; font-weight: bold; cursor: pointer; border: 2px solid #f9a825; background: #1a1a2e; color: #f9a825; }
+  .toolbar button:hover { background: #252540; }
+  .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-msg { font-size: 0.85rem; }
+  .status-msg.ok { color: #4caf50; }
+  .status-msg.error { color: #f44336; }
+  .status-msg.info { color: #888; }
+
+  .file-tabs { display: flex; gap: 0; margin-bottom: 0; }
+  .file-tab { padding: 0.4rem 1rem; background: #1a1a2e; border: 1px solid #333; border-bottom: none; border-radius: 6px 6px 0 0; color: #888; cursor: pointer; font-size: 0.85rem; }
+  .file-tab.active { background: #111; color: #f9a825; border-color: #333; font-weight: bold; }
+  .editor-wrap { border-radius: 0 6px 6px 6px; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/">Status</a>
+  <a href="/index">Index Monitor</a>
+  <a href="/sync-log">Sync Log</a>
+  <a href="/skip-report">Skip Report</a>
+  <a href="/config" class="active">Config</a>
+  <a href="/mcp-tools">MCP Tools</a>
+</nav>
+<h1>Configuration</h1>
+<p class="status-msg info" style="margin-bottom:0.8rem;">Changes to settings are picked up automatically. Source changes trigger a sync + reindex.</p>
+
+<div class="file-tabs">
+  <div class="file-tab active" data-file="config" onclick="switchTab('config')">config.yml</div>
+  <div class="file-tab" data-file="patterns" onclick="switchTab('patterns')">patterns.yml</div>
+</div>
+<div class="editor-wrap" id="editor-container">
+  <textarea id="fallback-editor"></textarea>
+</div>
+
+<div class="toolbar">
+  <button id="save-btn" onclick="saveConfig()">Save</button>
+  <span id="status-msg" class="status-msg info"></span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
+<script>
+let editor = null;
+let currentFile = 'config';
+let patternsContent = null;
+let configContent = null;
+let patternsReadOnly = true;
+
+function initEditor() {
+  const container = document.getElementById('editor-container');
+  if (typeof CodeMirror !== 'undefined') {
+    editor = CodeMirror(container, {
+      mode: 'yaml',
+      theme: 'lcars',
+      lineNumbers: true,
+      lineWrapping: true,
+      indentUnit: 2,
+      tabSize: 2,
+      indentWithTabs: false,
+      styleActiveLine: true,
+      matchBrackets: true,
+    });
+  } else {
+    // Fallback to plain textarea
+    document.getElementById('fallback-editor').style.display = 'block';
+  }
+}
+
+function getContent() {
+  if (editor) return editor.getValue();
+  return document.getElementById('fallback-editor').value;
+}
+
+function setContent(text, readOnly) {
+  if (editor) {
+    editor.setValue(text);
+    editor.setOption('readOnly', readOnly || false);
+    editor.clearHistory();
+    setTimeout(() => editor.refresh(), 1);
+  } else {
+    const ta = document.getElementById('fallback-editor');
+    ta.value = text;
+    ta.readOnly = readOnly || false;
+  }
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.className = 'status-msg ' + (cls || 'info');
+}
+
+function switchTab(file) {
+  // Store current content before switching
+  if (currentFile === 'config') configContent = getContent();
+  else patternsContent = getContent();
+
+  currentFile = file;
+  document.querySelectorAll('.file-tab').forEach(t => t.classList.toggle('active', t.dataset.file === file));
+
+  const btn = document.getElementById('save-btn');
+  if (file === 'config') {
+    setContent(configContent || '', false);
+    btn.disabled = false;
+    btn.textContent = 'Save';
+    setStatus('');
+  } else {
+    if (patternsContent !== null) {
+      setContent(patternsContent, patternsReadOnly);
+    } else {
+      loadPatterns();
+    }
+    btn.disabled = false;
+    btn.textContent = 'Save';
+    setStatus('');
+  }
+}
+
+async function loadConfig() {
+  setStatus('Loading...', 'info');
+  try {
+    const resp = await fetch('/api/config');
+    const data = await resp.json();
+    if (data.error) { setStatus(data.error, 'error'); return; }
+    configContent = data.content;
+    if (currentFile === 'config') setContent(data.content, false);
+    setStatus('', 'info');
+  } catch (e) {
+    setStatus('Failed to load config: ' + e, 'error');
+  }
+}
+
+async function loadPatterns() {
+  setStatus('Loading...', 'info');
+  try {
+    const resp = await fetch('/api/config/patterns');
+    const data = await resp.json();
+    if (data.error) { setStatus(data.error, 'error'); return; }
+    patternsContent = data.content;
+    patternsReadOnly = false;
+    if (currentFile === 'patterns') setContent(data.content, false);
+    setStatus('', 'info');
+  } catch (e) {
+    setStatus('Failed to load patterns: ' + e, 'error');
+  }
+}
+
+async function saveConfig() {
+  const content = getContent();
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  setStatus('', 'info');
+
+  const endpoint = currentFile === 'config' ? '/api/config' : '/api/config/patterns';
+
+  try {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content}),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      setStatus('Saved. Changes will be picked up automatically.', 'ok');
+    } else {
+      setStatus(data.error || 'Save failed', 'error');
+    }
+  } catch (e) {
+    setStatus('Save failed: ' + e, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save';
+}
+
+initEditor();
+loadConfig();
+</script>
+</body>
+</html>

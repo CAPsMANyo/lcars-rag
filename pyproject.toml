@@ -23,9 +23,9 @@ dependencies = [
 
     # Web UI
     "flask>=3.1.3",
-    "requests>=2.31.0",
+    "requests>=2.33.1",
 
-    # MCP client (for MCP test page)
+    # MCP client (for MCP tools test page)
     "mcp>=1.27.0",
 
     # MCP server (mounted into the dashboard at /mcp/http and /mcp/sse)
