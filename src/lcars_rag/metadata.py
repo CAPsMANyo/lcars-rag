@@ -29,11 +29,15 @@ def init_metadata_table():
                 source_name TEXT PRIMARY KEY,
                 source_type TEXT,
                 url TEXT,
+                path TEXT,
                 tags JSONB,
                 file_count INTEGER DEFAULT 0,
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             )
         """).format(_TABLE))
+        conn.execute(sql.SQL(
+            "ALTER TABLE {} ADD COLUMN IF NOT EXISTS path TEXT"
+        ).format(_TABLE))
         conn.commit()
     logger.info("Metadata table '%s' ready", METADATA_TABLE)
 
@@ -50,11 +54,12 @@ def sync_source_metadata():
             )
             conn.execute(sql.SQL("""
                 INSERT INTO {}
-                    (source_name, source_type, url, tags, file_count, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW())
+                    (source_name, source_type, url, path, tags, file_count, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (source_name) DO UPDATE SET
                     source_type = EXCLUDED.source_type,
                     url = EXCLUDED.url,
+                    path = EXCLUDED.path,
                     tags = EXCLUDED.tags,
                     file_count = EXCLUDED.file_count,
                     updated_at = NOW()
@@ -62,6 +67,7 @@ def sync_source_metadata():
                 source_name,
                 source.get("source_type", ""),
                 source.get("url", ""),
+                source.get("path", ""),
                 json.dumps(source.get("tags", [])),
                 file_count,
             ))

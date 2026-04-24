@@ -26,6 +26,9 @@
   td { padding: 0.5rem 0.8rem; border-top: 1px solid #222; font-size: 0.85rem; }
   tr:hover td { background: #222240; }
   .source-tag { background: #333355; color: #c0c0ff; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; }
+  .type-badge { display: inline-block; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.05em; margin-right: 0.35rem; vertical-align: middle; }
+  .type-badge.git { background: #2b3a2b; color: #a0d8a0; }
+  .type-badge.local { background: #3a2b3a; color: #d8a0d8; }
   .reason-tag { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; font-weight: 500; }
   .reason-excluded { background: #3d2b2b; color: #ff9999; }
   .reason-oversized { background: #3d3520; color: #ffd666; }
@@ -121,10 +124,11 @@ async function fetchMeta() {
 
     // Populate source filter
     const sf = document.getElementById('sourceFilter');
-    for (const source of Object.keys(meta.sources || {})) {
+    for (const [source, info] of Object.entries(meta.sources || {})) {
       const opt = document.createElement('option');
       opt.value = source;
-      opt.textContent = source;
+      const type = (info && info.source_type) || 'git';
+      opt.textContent = `[${type.toUpperCase()}] ${source}`;
       sf.appendChild(opt);
     }
 
@@ -187,14 +191,17 @@ async function fetchRows() {
     if (data.rows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" class="empty">No skipped files found.</td></tr>';
     } else {
-      tbody.innerHTML = data.rows.map(r => `
+      tbody.innerHTML = data.rows.map(r => {
+        const type = r.source_type || 'git';
+        return `
         <tr>
-          <td><span class="source-tag">${r.source}</span></td>
+          <td><span class="type-badge ${type}">${type.toUpperCase()}</span><span class="source-tag">${r.source}</span></td>
           <td>${r.file}</td>
           <td><span class="reason-tag reason-${r.reason}">${r.reason}</span></td>
           <td class="detail">${r.detail}</td>
           <td class="size" title="${r.size_bytes} bytes">${r.size_human || formatBytes(r.size_bytes)}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
     }
 
     updatePager();

@@ -13,6 +13,7 @@ from lcars_rag.config import (
     COCOINDEX_DATABASE_URL,
     LOGS_DIR,
     QDRANT_URL,
+    load_all_sources,
 )
 from lcars_rag.mcp_client import call_tool, connect_and_list_tools
 
@@ -351,6 +352,7 @@ def _load_skip_data():
         return _skip_cache["data"]
 
     raw = load_json(REPORT_PATH, {})
+    source_types = {s["name"]: s.get("source_type", "git") for s in load_all_sources()}
     rows = []
     for source, info in (raw.get("sources") or {}).items():
         for f in info.get("files") or []:
@@ -362,6 +364,7 @@ def _load_skip_data():
                 detail = f"MAX_FILE_SIZE={f['max_file_size_needed']}"
             rows.append({
                 "source": source,
+                "source_type": source_types.get(source, "git"),
                 "file": f.get("file", ""),
                 "reason": reason,
                 "detail": detail,
@@ -376,7 +379,10 @@ def _load_skip_data():
             "total_skipped": raw.get("total_skipped", 0),
             "counts_by_reason": raw.get("counts_by_reason", {}),
             "sources": {
-                name: {"counts_by_reason": info.get("counts_by_reason", {})}
+                name: {
+                    "counts_by_reason": info.get("counts_by_reason", {}),
+                    "source_type": source_types.get(name, "git"),
+                }
                 for name, info in (raw.get("sources") or {}).items()
             },
         },

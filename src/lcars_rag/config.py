@@ -40,10 +40,10 @@ PATTERNS = load_patterns()
 def load_all_sources():
     """Merge git_sources and local_sources into a single list."""
     sources = []
-    for s in CONFIG.get("git_sources", []):
+    for s in CONFIG.get("git_sources") or []:
         s.setdefault("source_type", "git")
         sources.append(s)
-    for s in CONFIG.get("local_sources", []):
+    for s in CONFIG.get("local_sources") or []:
         s.setdefault("source_type", "local")
         sources.append(s)
     return sources
