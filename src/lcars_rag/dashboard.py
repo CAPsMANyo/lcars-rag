@@ -67,20 +67,23 @@ SYNC_STATE_FILE = os.path.join(LOGS_DIR, "sync_state.json")
 
 
 def _check_embedding():
-    """Check if the embedding endpoint is reachable."""
+    """Check if the embedding endpoint is reachable and the configured model exists."""
     from lcars_rag import config
     addr = config.EMBEDDING_API_ADDRESS
     if not addr:
         return {"status": "unconfigured", "detail": "embedding_api_address not set"}
-    # TEI exposes model info at the base URL (strip /v1 suffix)
     base = addr.rstrip("/")
-    if base.endswith("/v1"):
-        base = base[:-3]
     try:
-        r = http_requests.get(f"{base}/info", timeout=5)
-        if r.ok:
-            return {"status": "ok", "detail": r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text[:200]}
-        return {"status": "error", "detail": f"HTTP {r.status_code}"}
+        r = http_requests.get(f"{base}/models", timeout=5)
+        if not r.ok:
+            return {"status": "error", "detail": f"HTTP {r.status_code}"}
+        models = [m["id"] for m in r.json().get("data", [])]
+        configured = config.EMBEDDING_MODEL
+        if not configured:
+            return {"status": "error", "detail": "embedding_model not configured"}
+        if configured in models:
+            return {"status": "ok", "detail": f"{configured} ({len(models)} models available)"}
+        return {"status": "error", "detail": f"'{configured}' not in {models}"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
