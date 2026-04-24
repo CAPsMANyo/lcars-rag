@@ -73,7 +73,6 @@ REFRESH_INTERVAL = int(SETTINGS.get("refresh_interval", 30))
 SYNC_INTERVAL = int(SETTINGS.get("sync_interval", 3600))
 METADATA_TABLE = SETTINGS.get("metadata_table", "source_metadata")
 MAX_INFLIGHT_ROWS = int(SETTINGS.get("max_inflight_rows", 25))
-MCP_SERVER_URL = SETTINGS.get("mcp_server_url", "")
 
 LANGUAGE_MAP = {
     ".py": "python", ".rs": "rust", ".js": "javascript", ".ts": "typescript",
@@ -98,7 +97,7 @@ def reload_config():
     global EMBEDDING_MODEL, EMBEDDING_API_ADDRESS, EMBEDDING_DIMENSION
     global USE_EXCLUDE_PATTERNS, MAX_FILE_SIZE, CHUNK_SIZE, CHUNK_OVERLAP
     global REFRESH_INTERVAL, SYNC_INTERVAL, METADATA_TABLE
-    global MAX_INFLIGHT_ROWS, MCP_SERVER_URL
+    global MAX_INFLIGHT_ROWS
 
     CONFIG = load_config()
     SETTINGS = CONFIG.get("settings", {})
@@ -114,4 +113,3 @@ def reload_config():
     SYNC_INTERVAL = int(SETTINGS.get("sync_interval", 3600))
     METADATA_TABLE = SETTINGS.get("metadata_table", "source_metadata")
     MAX_INFLIGHT_ROWS = int(SETTINGS.get("max_inflight_rows", 25))
-    MCP_SERVER_URL = SETTINGS.get("mcp_server_url", "")
