@@ -14,6 +14,7 @@ from lcars_rag.config import (
     EMBEDDING_API_ADDRESS,
     EMBEDDING_DIMENSION,
     EMBEDDING_MODEL,
+    MAX_INFLIGHT_ROWS,
     REFRESH_INTERVAL,
     REPOS_DIR,
     USE_EXCLUDE_PATTERNS,
@@ -137,6 +138,7 @@ def embedding_flow(flow_builder: cocoindex.FlowBuilder, data_scope: cocoindex.Da
                 excluded_patterns=patterns["exclude"] or None,
             ),
             refresh_interval=datetime.timedelta(seconds=REFRESH_INTERVAL),
+            max_inflight_rows=MAX_INFLIGHT_ROWS,
         )
 
         with data_scope[f"source_{source_name}"].row() as file:
