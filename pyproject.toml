@@ -28,8 +28,8 @@ dependencies = [
     # MCP client (for MCP tools test page)
     "mcp>=1.27.0",
 
-    # MCP server (mounted into the dashboard at /mcp/http and /mcp/sse)
-    "lcars-mcp-server @ git+https://github.com/CAPsMANyo/lcars-mcp-server.git@main",
+    # MCP server (embedded)
+    "fastmcp",
 
     # ASGI runtime for serving Flask + FastMCP on the same port
     "uvicorn[standard]>=0.30",
@@ -40,13 +40,11 @@ dependencies = [
 [project.scripts]
 lcars-sync-repos = "lcars_rag.sync_repos:main"
 lcars-dashboard = "lcars_rag.dashboard:main"
+lcars-mcp-server = "lcars_mcp_server.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [tool.hatch.build.targets.wheel]
-packages = ["src/lcars_rag"]
+packages = ["src/lcars_rag", "src/lcars_mcp_server"]
