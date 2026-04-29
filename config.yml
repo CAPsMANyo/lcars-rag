@@ -320,3 +320,18 @@ git_sources:
   #     - lasp
   #     - suse
 
+# Local filesystem sources — indexed in place, no cloning. Unlike git_sources
+# these are not synced on a schedule; the CocoIndex watcher picks up file
+# changes directly. The `url` field is optional (a reference link such as a
+# docs site or issue tracker).
+local_sources:
+  # - name: my_local_docs
+  #   path: /absolute/path/to/docs
+  #   tags:
+  #     - docs
+  #     - local
+  #   url: https://example.com/docs        # optional reference link
+  #   max_file_size: 200000                # optional per-source override
+  #   include: ["**/*.md", "**/*.rst"]     # optional per-source patterns
+  #   exclude: ["**/node_modules/**"]      # optional per-source patterns
+

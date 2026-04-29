@@ -66,6 +66,16 @@
   .hit .lang { color: #888; font-size: 0.7rem; }
   .hit .chunk { color: #bbb; font-size: 0.75rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; border-top: 1px dashed #333; padding-top: 0.4rem; margin-top: 0.4rem; }
 
+  .source-row { background: #0d0d1d; border: 1px solid #2a2a45; border-left: 3px solid #f9a825; border-radius: 4px; padding: 0.55rem 0.75rem; margin-bottom: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .source-row .head { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .source-row .name { color: #f9a825; font-family: 'Cascadia Code', monospace; font-size: 0.85rem; font-weight: bold; }
+  .source-row .count { color: #888; font-size: 0.75rem; }
+  .source-row .ref { color: #9cc; font-size: 0.75rem; word-break: break-all; }
+  .type-badge { display: inline-block; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.05em; }
+  .type-badge.git { background: #2b3a2b; color: #a0d8a0; }
+  .type-badge.local { background: #3a2b3a; color: #d8a0d8; }
+  .tag-chip { background: #333355; color: #c0c0ff; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.7rem; margin-right: 0.25rem; }
+
   .empty { color: #666; font-size: 0.85rem; font-style: italic; padding: 0.8rem; }
 </style>
 </head>
@@ -336,11 +346,37 @@ function renderResult(result, el) {
     return;
   }
 
+  if (SELECTED && (SELECTED.name === 'list_sources' || SELECTED.name === 'search_sources') && Array.isArray(parsed)) {
+    el.innerHTML = parsed.map(renderSourceRow).join('') ||
+      '<div class="empty">No sources.</div>';
+    return;
+  }
+
   if (parsed !== null) {
     el.textContent = JSON.stringify(parsed, null, 2);
   } else {
     el.textContent = texts.length ? texts.join('\n\n') : JSON.stringify(result, null, 2);
   }
+}
+
+function renderSourceRow(s) {
+  const type = (s.source_type || 'git').toLowerCase();
+  const typeLabel = type.toUpperCase();
+  const tags = Array.isArray(s.tags) && s.tags.length
+    ? `<div>${s.tags.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
+  const ref = s.url ? `<div class="ref">${escapeHtml(s.url)}</div>` : '';
+  const count = (s.file_count != null) ? `<span class="count">${s.file_count} files</span>` : '';
+  return `
+    <div class="source-row">
+      <div class="head">
+        <span class="type-badge ${type}">${typeLabel}</span>
+        <span class="name">${escapeHtml(s.source_name || '')}</span>
+        ${count}
+      </div>
+      ${ref}
+      ${tags}
+    </div>`;
 }
 
 function renderSearchHit(hit) {

@@ -13,6 +13,7 @@ from lcars_rag.config import (
     COCOINDEX_DATABASE_URL,
     LOGS_DIR,
     QDRANT_URL,
+    load_all_sources,
 )
 from lcars_rag.mcp_client import call_tool, connect_and_list_tools
 
@@ -66,20 +67,23 @@ SYNC_STATE_FILE = os.path.join(LOGS_DIR, "sync_state.json")
 
 
 def _check_embedding():
-    """Check if the embedding endpoint is reachable."""
+    """Check if the embedding endpoint is reachable and the configured model exists."""
     from lcars_rag import config
     addr = config.EMBEDDING_API_ADDRESS
     if not addr:
         return {"status": "unconfigured", "detail": "embedding_api_address not set"}
-    # TEI exposes model info at the base URL (strip /v1 suffix)
     base = addr.rstrip("/")
-    if base.endswith("/v1"):
-        base = base[:-3]
     try:
-        r = http_requests.get(f"{base}/info", timeout=5)
-        if r.ok:
-            return {"status": "ok", "detail": r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text[:200]}
-        return {"status": "error", "detail": f"HTTP {r.status_code}"}
+        r = http_requests.get(f"{base}/models", timeout=5)
+        if not r.ok:
+            return {"status": "error", "detail": f"HTTP {r.status_code}"}
+        models = [m["id"] for m in r.json().get("data", [])]
+        configured = config.EMBEDDING_MODEL
+        if not configured:
+            return {"status": "error", "detail": "embedding_model not configured"}
+        if configured in models:
+            return {"status": "ok", "detail": f"{configured} ({len(models)} models available)"}
+        return {"status": "error", "detail": f"'{configured}' not in {models}"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
@@ -351,6 +355,7 @@ def _load_skip_data():
         return _skip_cache["data"]
 
     raw = load_json(REPORT_PATH, {})
+    source_types = {s["name"]: s.get("source_type", "git") for s in load_all_sources()}
     rows = []
     for source, info in (raw.get("sources") or {}).items():
         for f in info.get("files") or []:
@@ -362,6 +367,7 @@ def _load_skip_data():
                 detail = f"MAX_FILE_SIZE={f['max_file_size_needed']}"
             rows.append({
                 "source": source,
+                "source_type": source_types.get(source, "git"),
                 "file": f.get("file", ""),
                 "reason": reason,
                 "detail": detail,
@@ -376,7 +382,10 @@ def _load_skip_data():
             "total_skipped": raw.get("total_skipped", 0),
             "counts_by_reason": raw.get("counts_by_reason", {}),
             "sources": {
-                name: {"counts_by_reason": info.get("counts_by_reason", {})}
+                name: {
+                    "counts_by_reason": info.get("counts_by_reason", {}),
+                    "source_type": source_types.get(name, "git"),
+                }
                 for name, info in (raw.get("sources") or {}).items()
             },
         },

@@ -169,7 +169,31 @@ def main():
             shutil.rmtree(entry)
             removed += 1
 
-    log(f"Done: {len(sources)} sources | {skipped} ok | {synced} updated | {cloned} cloned | {removed} removed | {failed} failed", "DONE")
+    # Validate local_sources paths (no cloning — just existence check so operators
+    # catch typos/missing mounts before the CocoIndex run silently skips them).
+    local_sources = config.get("local_sources", []) or []
+    local_ok = 0
+    local_missing = 0
+    for local in local_sources:
+        name = local.get("name")
+        path = local.get("path")
+        if not name or not path:
+            log(f"Skipping invalid local entry: {local}", "WARN")
+            local_missing += 1
+            continue
+        if Path(path).is_dir():
+            log(f"{name}  {path}", "LOCAL")
+            local_ok += 1
+        else:
+            log(f"{name}  path missing or not a directory: {path}", "WARN")
+            local_missing += 1
+
+    log(
+        f"Done: {len(sources)} git + {len(local_sources)} local | "
+        f"{skipped} ok | {synced} updated | {cloned} cloned | {removed} removed | "
+        f"{failed} failed | local: {local_ok} ok, {local_missing} missing",
+        "DONE",
+    )
 
 
 if __name__ == "__main__":
