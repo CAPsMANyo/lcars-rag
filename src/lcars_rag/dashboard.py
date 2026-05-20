@@ -2,11 +2,14 @@
 
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 
 import requests as http_requests
 from flask import Flask, render_template, request, jsonify
+
+logger = logging.getLogger(__name__)
 
 from lcars_rag.config import (
     BASE_DIR,
@@ -84,8 +87,9 @@ def _check_embedding():
         if configured in models:
             return {"status": "ok", "detail": f"{configured} ({len(models)} models available)"}
         return {"status": "error", "detail": f"'{configured}' not in {models}"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    except Exception:
+        logger.exception("Embedding check failed")
+        return {"status": "error", "detail": "Embedding service unavailable"}
 
 
 def _check_postgres():
@@ -98,8 +102,9 @@ def _check_postgres():
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
         return {"status": "ok", "detail": "connected"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    except Exception:
+        logger.exception("PostgreSQL check failed")
+        return {"status": "error", "detail": "PostgreSQL unavailable"}
 
 
 def _check_qdrant():
@@ -113,8 +118,9 @@ def _check_qdrant():
         if r.ok:
             return {"status": "ok", "detail": "healthy"}
         return {"status": "error", "detail": f"HTTP {r.status_code}"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    except Exception:
+        logger.exception("Qdrant health check failed")
+        return {"status": "error", "detail": "Qdrant unavailable"}
 
 
 def _check_process(pid_file, name):
@@ -473,7 +479,8 @@ def api_config_save():
     try:
         parsed = yaml.safe_load(content)
     except yaml.YAMLError as e:
-        return jsonify({"error": f"Invalid YAML: {e}"}), 400
+        logger.exception("Invalid YAML in config save")
+        return jsonify({"error": "Invalid YAML format"}), 400
 
     if not isinstance(parsed, dict):
         return jsonify({"error": "Config must be a YAML mapping"}), 400
@@ -509,7 +516,8 @@ def api_patterns_save():
     try:
         parsed = yaml.safe_load(content)
     except yaml.YAMLError as e:
-        return jsonify({"error": f"Invalid YAML: {e}"}), 400
+        logger.exception("Invalid YAML in patterns save")
+        return jsonify({"error": "Invalid YAML format"}), 400
 
     if not isinstance(parsed, dict):
         return jsonify({"error": "Patterns must be a YAML mapping"}), 400
@@ -548,8 +556,9 @@ def api_mcp_status():
     try:
         tools = asyncio.run(connect_and_list_tools(url))
         return jsonify({"status": "ok", "tool_count": len(tools), "url": url})
-    except Exception as e:
-        return jsonify({"status": "error", "detail": str(e), "url": url})
+    except Exception:
+        logger.exception("MCP status check failed")
+        return jsonify({"status": "error", "detail": "MCP server unavailable", "url": url})
 
 
 @app.route("/api/mcp/tools")
@@ -557,8 +566,9 @@ def api_mcp_tools():
     url = _mcp_internal_url()
     try:
         return jsonify({"tools": asyncio.run(connect_and_list_tools(url)), "url": url})
-    except Exception as e:
-        return jsonify({"error": str(e), "url": url}), 500
+    except Exception:
+        logger.exception("MCP tools list failed")
+        return jsonify({"error": "MCP server unavailable", "url": url}), 500
 
 
 @app.route("/api/mcp/call", methods=["POST"])
@@ -572,8 +582,9 @@ def api_mcp_call():
     try:
         result = asyncio.run(call_tool(url, name, arguments))
         return jsonify({"result": result})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        logger.exception("MCP tool call failed")
+        return jsonify({"error": "MCP tool call failed"}), 500
 
 
 # ---------------------------------------------------------------------------
