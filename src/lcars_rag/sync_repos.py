@@ -117,8 +117,20 @@ def main():
         repo_dir = base_dir / repo_name
 
         use_ssh = is_ssh_url(repo_url)
+        env = git_env
         if use_ssh:
-            authenticated_url = repo_url
+            ssh_key_path = os.environ.get("SSH_PRIVATE_KEY_PATH")
+            if ssh_key_path:
+                env = dict(git_env)
+                env["GIT_SSH_COMMAND"] = (
+                    f"ssh -i {ssh_key_path} "
+                    f"-o StrictHostKeyChecking=no "
+                    f"-o UserKnownHostsFile=/dev/null"
+                )
+            else:
+                log(f"  SSH URL but SSH_PRIVATE_KEY_PATH not set — auth may fail", "WARN")
+                # Continue with git_env (no SSH command) so we don't break everything
+                continue
         elif git_token:
             authenticated_url = repo_url.replace("https://", f"https://{git_token}@")
         else:
@@ -127,7 +139,7 @@ def main():
         if repo_dir.is_dir():
             remote_commit_output = get_command_output(
                 ["git", "ls-remote", authenticated_url, branch],
-                env=git_env,
+                env=env,
             )
 
             if not remote_commit_output:
@@ -135,7 +147,7 @@ def main():
             else:
                 remote_commit = remote_commit_output.split()[0]
 
-            local_commit = get_command_output(["git", "rev-parse", "HEAD"], cwd=repo_dir, env=git_env)
+            local_commit = get_command_output(["git", "rev-parse", "HEAD"], cwd=repo_dir, env=env)
 
             if remote_commit and local_commit and remote_commit == local_commit:
                 log(f"{repo_name}  ({local_commit[:7]})", "OK")
@@ -143,10 +155,10 @@ def main():
                 continue
 
             log(f"{repo_name}  {(local_commit or '?')[:7]} -> {(remote_commit or '?')[:7]}", "UPDATE")
-            if not run_command(["git", "fetch", "--depth=1", authenticated_url, branch], cwd=repo_dir, env=git_env):
+            if not run_command(["git", "fetch", "--depth=1", authenticated_url, branch], cwd=repo_dir, env=env):
                 failed += 1
                 continue
-            if not run_command(["git", "reset", "--hard", "FETCH_HEAD"], cwd=repo_dir, env=git_env):
+            if not run_command(["git", "reset", "--hard", "FETCH_HEAD"], cwd=repo_dir, env=env):
                 failed += 1
                 continue
             synced += 1
@@ -155,7 +167,7 @@ def main():
             if not run_command([
                 "git", "clone", "--depth=1", "-b", branch,
                 authenticated_url, str(repo_dir),
-            ], env=git_env):
+            ], env=env):
                 failed += 1
                 continue
             cloned += 1
