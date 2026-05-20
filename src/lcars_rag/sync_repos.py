@@ -129,6 +129,8 @@ def main():
                 )
             else:
                 log(f"  SSH URL but SSH_PRIVATE_KEY_PATH not set — auth may fail", "WARN")
+                # Continue with git_env (no SSH command) so we don't break everything
+                continue
         elif git_token:
             authenticated_url = repo_url.replace("https://", f"https://{git_token}@")
         else:
