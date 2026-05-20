@@ -34,6 +34,8 @@ services:
       - ./config.yml:/app/config.yml
       # Override baked-in patterns.yml if needed:
       # - ./patterns.yml:/app/patterns.yml
+      # SSH key for git authentication (optional, for git@ or ssh:// sources)
+      # - ./secrets/ssh_key:/app/secrets/ssh_key:ro
     env_file:
       - .env
     depends_on:

@@ -17,6 +17,11 @@ COCOINDEX_PID_FILE="$LOGS_DIR/cocoindex.pid"
 SYNC_INTERVAL=$(grep 'sync_interval:' /app/config.yml 2>/dev/null | awk '{print $2}')
 SYNC_INTERVAL="${SYNC_INTERVAL:-3600}"
 
+# Fix SSH key permissions if configured
+if [ -n "${SSH_PRIVATE_KEY_PATH}" ] && [ -f "${SSH_PRIVATE_KEY_PATH}" ]; then
+    chmod 400 "${SSH_PRIVATE_KEY_PATH}" 2>/dev/null || true
+fi
+
 touch "$SYNC_LOG" "$COCOINDEX_LOG"
 
 # --- Write sync state as JSON ---
